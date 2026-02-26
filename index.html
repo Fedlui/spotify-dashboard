@@ -741,14 +741,12 @@ function renderWrapped() {
     <div class="wrapped-card yellow">
       <div class="wrapped-card-icon">📅</div>
       <div class="wrapped-card-label">Música por décadas</div>
-      <div class="decade-chart">
+      <div style="display:flex;gap:.75rem;align-items:flex-end;height:140px;margin-top:1.25rem;padding:0 .25rem;overflow:visible;">
         ${sortedDecades.map(([dec,cnt])=>`
-          <div class="decade-col">
-            <span class="decade-cnt">${cnt}</span>
-            <div class="decade-bar-wrap">
-              <div class="decade-bar" style="height:${Math.round(cnt/maxDec*76)+4}px"></div>
-            </div>
-            <span class="decade-label">${dec}s</span>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.35rem;height:100%;justify-content:flex-end;">
+            <span style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--green);font-weight:600;">${cnt}</span>
+            <div style="width:100%;height:${Math.round(cnt/maxDec*90)+8}px;background:linear-gradient(180deg,var(--green),rgba(29,185,84,.3));border-radius:6px 6px 0 0;min-height:8px;"></div>
+            <span style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--muted);white-space:nowrap;">${dec}s</span>
           </div>`).join('')}
       </div>
     </div>
@@ -814,7 +812,7 @@ function exportData() {
   showToast('✓ Datos exportados');
 }
 
-// ===== RECOMMENDATIONS =====
+// ===== RECOMMENDATIONS via Last.fm getSimilar =====
 let recsLoaded = false;
 
 async function loadRecommendations() {
@@ -827,100 +825,121 @@ async function loadRecommendations() {
   container.innerHTML = '';
 
   try {
-    // Use top 5 track seeds for recommendations
-    const seedTracks = tracksData.slice(0, 5).map(t => t.id).join(',');
-
-    // Fetch 10 recommendations based on top tracks
-    const res = await spotifyFetch(`/recommendations?seed_tracks=${seedTracks}&limit=10`);
-    const recs = res.tracks || [];
-
-    // Also fetch 10 recommendations biased by top genres (via top artists)
-    const topArtistIds = [...new Set(tracksData.slice(0,3).map(t => t.artists[0]?.id))].filter(Boolean).slice(0,3).join(',');
-    const res2 = await spotifyFetch(`/recommendations?seed_artists=${topArtistIds}&limit=10`);
-    const recs2 = res2.tracks || [];
-
-    // Remove duplicates and tracks already in user's top
     const topIds = new Set(tracksData.map(t => t.id));
-    const allRec = [...recs, ...recs2].filter(t => !topIds.has(t.id));
-    const seen = new Set();
-    const unique = allRec.filter(t => seen.has(t.id) ? false : seen.add(t.id));
+    const topArtistNames = new Set(tracksData.slice(0,20).flatMap(t => t.artists.map(a => a.name)));
+    const topGenreSet = new Set(tracksData.slice(0,20).flatMap(t => t._genres||[]));
+
+    // Get similar tracks for top 10 songs via Last.fm
+    const top10 = tracksData.slice(0, 10);
+    const similarMap = {}; // trackName -> [similar tracks]
+
+    loading.querySelector('.loading-text').textContent = 'Buscando canciones similares...';
+
+    for (const track of top10) {
+      try {
+        const artist = encodeURIComponent(track.artists[0]?.name||'');
+        const song = encodeURIComponent(track.name);
+        const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getSimilar&api_key=${LASTFM_KEY}&artist=${artist}&track=${song}&limit=5&format=json`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const similar = data?.similartracks?.track || [];
+        if (similar.length) {
+          similarMap[track.name] = similar.map(s => ({
+            lfm_name: s.name,
+            lfm_artist: s.artist?.name || '',
+            match: parseFloat(s.match||0),
+            basedOn: track.name,
+            basedOnArtist: track.artists[0]?.name||''
+          }));
+        }
+      } catch(e) { /* skip */ }
+    }
+
+    // Flatten, deduplicate, sort by match score
+    const allSimilar = Object.values(similarMap).flat();
+    const seenNames = new Set();
+    // Exclude songs already in user top (by name match)
+    const topNames = new Set(tracksData.map(t => t.name.toLowerCase()));
+    const unique = allSimilar
+      .filter(s => {
+        const key = s.lfm_name.toLowerCase() + '|' + s.lfm_artist.toLowerCase();
+        if (seenNames.has(key)) return false;
+        if (topNames.has(s.lfm_name.toLowerCase())) return false;
+        seenNames.add(key);
+        return true;
+      })
+      .sort((a,b) => b.match - a.match)
+      .slice(0, 20);
 
     loading.classList.add('hidden');
 
     if (!unique.length) {
-      container.innerHTML = '<div class="error-box">No se encontraron recomendaciones. Intenta con otro período de tiempo.</div>';
+      container.innerHTML = '<div class="error-box">Last.fm no encontró canciones similares. Intenta con otro período.</div>';
       return;
     }
 
-    // Get genres for recommendations via Last.fm
-    const chunks = [];
-    for (let i = 0; i < unique.length; i += 4) chunks.push(unique.slice(i, i+4));
-    for (const chunk of chunks) {
-      await Promise.all(chunk.map(async (track) => {
-        try {
-          const artist = encodeURIComponent(track.artists[0]?.name||'');
-          const song = encodeURIComponent(track.name);
-          const lfm = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_KEY}&artist=${artist}&track=${song}&format=json`);
-          if (lfm.ok) {
-            const d = await lfm.json();
-            const tags = d?.track?.toptags?.tag || [];
-            track._genres = tags.slice(0,3).map(t=>t.name).filter(t=>t.toLowerCase()!=='seen live'&&t.length>1);
-          } else { track._genres = []; }
-        } catch(e) { track._genres = []; }
-      }));
+    // Enrich with Last.fm info (image, tags)
+    loading.classList.remove('hidden');
+    loading.querySelector('.loading-text').textContent = 'Obteniendo detalles...';
+
+    const enriched = await Promise.all(unique.map(async (s) => {
+      try {
+        const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_KEY}&artist=${encodeURIComponent(s.lfm_artist)}&track=${encodeURIComponent(s.lfm_name)}&format=json`);
+        if (!res.ok) return s;
+        const d = await res.json();
+        const track = d?.track;
+        s.image = track?.album?.image?.find(i=>i.size==='large')?.['#text'] || '';
+        s.listeners = parseInt(track?.listeners||0);
+        s.tags = (track?.toptags?.tag||[]).slice(0,3).map(t=>t.name).filter(t=>t.toLowerCase()!=='seen live'&&t.length>1);
+        s.url = track?.url||'';
+        return s;
+      } catch(e) { return s; }
+    }));
+
+    loading.classList.add('hidden');
+
+    // Build reason text
+    function getReason(s) {
+      const pct = Math.round(s.match * 100);
+      return `${pct}% similar a "${s.basedOn}" · ${s.basedOnArtist}`;
     }
 
-    // Explain why each track is recommended
-    const topGenres = new Set(tracksData.slice(0,10).flatMap(t=>t._genres||[]).slice(0,10));
-    const topArtistNames = new Set(tracksData.slice(0,10).flatMap(t=>t.artists.map(a=>a.name)));
+    // Group by basedOn track
+    const grouped = {};
+    enriched.forEach(s => {
+      if (!grouped[s.basedOn]) grouped[s.basedOn] = [];
+      grouped[s.basedOn].push(s);
+    });
 
-    function getReason(track) {
-      const sharedArtist = track.artists.find(a => topArtistNames.has(a.name));
-      if (sharedArtist) return `Porque escuchas a ${sharedArtist.name}`;
-      const sharedGenre = (track._genres||[]).find(g => topGenres.has(g));
-      if (sharedGenre) return `Tu género: ${sharedGenre}`;
-      return `Basado en tus top ${tracksData.slice(0,5).map(t=>t.name).slice(0,2).join(', ')}`;
-    }
-
-    // Split: based on top tracks vs based on top artists
-    const fromTracks = unique.slice(0, 10);
-    const fromArtists = unique.slice(10, 20);
-
-    function renderRecCards(tracks) {
-      return tracks.map(track => {
-        const cover = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url;
-        const reason = getReason(track);
+    // Render by source song
+    let html = '';
+    for (const [sourceName, tracks] of Object.entries(grouped)) {
+      const sourceTrack = tracksData.find(t => t.name === sourceName);
+      html += `<p class="rec-section-title">🎵 Porque te gusta: <span style="color:var(--green)">${escHtml(sourceName)}</span> — ${escHtml(sourceTrack?.artists?.[0]?.name||'')}</p>`;
+      html += `<div class="rec-grid">`;
+      html += tracks.map(s => {
+        const hasImg = s.image && !s.image.includes('2a96cbd8b46e442fc41c2b86b821562f');
+        const reason = getReason(s);
+        const listeners = s.listeners ? s.listeners.toLocaleString() + ' oyentes' : '';
         return `
         <div class="rec-card">
           <div class="rec-header">
-            ${cover ? `<img class="rec-cover" src="${cover}" alt="${escHtml(track.name)}" loading="lazy">` : `<div class="rec-cover-ph">♪</div>`}
+            ${hasImg ? `<img class="rec-cover" src="${escHtml(s.image)}" alt="${escHtml(s.lfm_name)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="rec-cover-ph" style="display:none">♪</div>` : `<div class="rec-cover-ph">♪</div>`}
             <div class="rec-info">
-              <div class="rec-name">${escHtml(track.name)}</div>
-              <div class="rec-artist">${track.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+              <div class="rec-name">${escHtml(s.lfm_name)}</div>
+              <div class="rec-artist">${escHtml(s.lfm_artist)}</div>
             </div>
           </div>
           <div class="rec-reason">${escHtml(reason)}</div>
-          <div class="rec-pop">
-            <span class="rec-pop-label">Popularidad:</span>
-            <div class="pop-track" style="width:80px"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
-            <span class="pop-num">${track.popularity??'—'}</span>
-          </div>
-          ${(track._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
-          <div onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden">
-            <iframe src="https://open.spotify.com/embed/track/${track.id}?utm_source=generator&theme=0" width="100%" height="80" frameBorder="0" allow="autoplay;clipboard-write;encrypted-media;fullscreen;picture-in-picture" loading="lazy" style="border-radius:10px;display:block;"></iframe>
-          </div>
+          ${listeners ? `<div style="font-size:.72rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">👥 ${listeners}</div>` : ''}
+          ${(s.tags||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+          ${s.url ? `<a href="${escHtml(s.url)}" target="_blank" style="font-size:.75rem;color:var(--green);font-family:'JetBrains Mono',monospace;text-decoration:none;">▶ Ver en Last.fm →</a>` : ''}
         </div>`;
       }).join('');
+      html += `</div>`;
     }
 
-    container.innerHTML = `
-      <p class="rec-section-title">🎵 Basado en tus canciones favoritas</p>
-      <div class="rec-grid">${renderRecCards(fromTracks)}</div>
-      ${fromArtists.length ? `
-      <p class="rec-section-title">🎤 Basado en tus artistas favoritos</p>
-      <div class="rec-grid">${renderRecCards(fromArtists)}</div>` : ''}
-    `;
-
+    container.innerHTML = html;
     recsLoaded = true;
 
   } catch(e) {
