@@ -419,16 +419,22 @@ function estimateListeners(pop) {
   return Math.round(1000 * Math.exp(p * 0.115));
 }
 
-function formatListeners(pop) {
-  // Handle all edge cases: undefined, null, empty string, NaN
-  if (pop === undefined || pop === null || pop === '' || pop === false) return '—';
-  const p = Number(pop);
-  if (isNaN(p)) return '—';
-  const n = Math.round(1000 * Math.exp(p * 0.115));
+function formatNum(n) {
+  if (!n || isNaN(n)) return '—';
   if (n >= 1000000000) return (n/1000000000).toFixed(1) + 'B';
   if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
   if (n >= 1000) return Math.round(n/1000) + 'K';
   return n.toString();
+}
+
+function formatListeners(pop, track) {
+  // Primero usa oyentes reales de Last.fm si están disponibles
+  if (track && track._listeners) return formatNum(track._listeners);
+  // Si no, estima desde el índice de Spotify
+  if (pop === undefined || pop === null) return '—';
+  const p = Number(pop);
+  if (isNaN(p)) return '—';
+  return formatNum(Math.round(1000 * Math.exp(p * 0.115))) + ' ~est';
 }
 
 // ===== PKCE =====
@@ -556,8 +562,27 @@ async function loadData() {
     }
     const seen = new Set();
     tracksData = allTracks.filter(t => seen.has(t.id) ? false : seen.add(t.id));
-    // Asegurar que popularity siempre sea un número
-    tracksData.forEach(t => { if (t.popularity === undefined || t.popularity === null) t.popularity = 0; });
+
+    // /me/top/tracks a veces no incluye popularity — obtenerla con /tracks?ids=
+    document.querySelector('.loading-text').textContent = 'Obteniendo oyentes...';
+    const missingPop = tracksData.filter(t => t.popularity === undefined || t.popularity === null);
+    if (missingPop.length > 0) {
+      // Fetch in chunks of 50
+      for (let i = 0; i < missingPop.length; i += 50) {
+        const chunk = missingPop.slice(i, i + 50);
+        const ids = chunk.map(t => t.id).join(',');
+        try {
+          const res = await spotifyFetch(`/tracks?ids=${ids}`);
+          (res.tracks || []).forEach(ft => {
+            if (!ft) return;
+            const orig = tracksData.find(t => t.id === ft.id);
+            if (orig && ft.popularity !== undefined) orig.popularity = ft.popularity;
+          });
+        } catch(e) { /* si falla, continuar */ }
+      }
+    }
+    // Fallback final solo para los que siguen sin dato
+    tracksData.forEach(t => { if (t.popularity === undefined || t.popularity === null) t.popularity = null; });
 
     document.querySelector('.loading-text').textContent = 'Obteniendo géneros y BPM...';
     await fetchEnrichedData();
@@ -587,12 +612,17 @@ async function fetchEnrichedData() {
         const artist = encodeURIComponent(track.artists[0]?.name||'');
         const song = encodeURIComponent(track.name);
 
-        // Last.fm: géneros
+        // Last.fm: géneros + oyentes reales
         const lfm = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_KEY}&artist=${artist}&track=${song}&format=json`);
         if (lfm.ok) {
           const d = await lfm.json();
           const tags = d?.track?.toptags?.tag || [];
           track._genres = tags.slice(0,4).map(t=>t.name).filter(t=>t.toLowerCase()!=='seen live'&&t.length>1);
+          // Oyentes y reproducciones reales de Last.fm
+          const listeners = parseInt(d?.track?.listeners || 0);
+          const playcount = parseInt(d?.track?.playcount || 0);
+          if (listeners > 0) track._listeners = listeners;
+          if (playcount > 0) track._playcount = playcount;
         }
 
         // BPM estimado inteligentemente por género + popularidad
@@ -685,7 +715,7 @@ function renderTracks() {
       <div class="track-meta">
         <div class="pop-bar">
           <div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
-          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity)}</span>
+          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity, track)}</span>
         </div>
         <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div>
       </div>
@@ -705,7 +735,7 @@ function renderTrackDetails(track, mins, secs) {
     {label:'Tonalidad',value:audio.key||'—'},
     {label:'Modo',value:audio.mode||'—'},
     {label:'Volumen',value:audio.loudness||'—'},
-    {label:'Oyentes',value:formatListeners(track.popularity)==='—'?'—':`${formatListeners(track.popularity)} (índice: ${track.popularity??'?'}/100)`},
+    {label:'Oyentes',value:track._listeners ? track._listeners.toLocaleString() + ' (Last.fm)' : formatListeners(track.popularity, track)},
     {label:'Álbum',value:track.album?.name||'—'},
   ];
   return `
@@ -835,7 +865,7 @@ function renderWrapped() {
             ${cover?`<img class="wrapped-thumb" src="${cover}" alt="">`:`<div class="wrapped-thumb-placeholder">♪</div>`}
             <div class="wrapped-item-info">
               <div class="wrapped-item-name">${escHtml(t.name)}</div>
-              <div class="wrapped-item-sub">${escHtml(t.artists[0]?.name||'')} · ${formatListeners(t.popularity)} oyentes</div>
+              <div class="wrapped-item-sub">${escHtml(t.artists[0]?.name||'')} · ${formatListeners(t.popularity, t)} oyentes</div>
             </div>
           </li>`;}).join('')}
       </ul>
@@ -899,7 +929,7 @@ function exportData() {
     return {
       track_name:t.name, artist_name:t.artists.map(a=>a.name).join(', '),
       released_year:t.album?.release_date?.split('-')[0]||null,
-      popularidad_index:t.popularity, oyentes_estimados:formatListeners(t.popularity), duration:`${mins}:${secs}`, duration_ms:t.duration_ms,
+      popularidad_index:t.popularity, oyentes_lastfm:t._listeners?t._listeners.toLocaleString():null, oyentes_estimados:formatListeners(t.popularity, t), duration:`${mins}:${secs}`, duration_ms:t.duration_ms,
       bpm:t._audio?.bpm||null, signature:t._audio?.time_signature||null,
       loudness:t._audio?.loudness||null, key:t._audio?.key||null, mode:t._audio?.mode||null,
       danceability:null, valence:null, energy:null, acousticness:null,
@@ -1129,7 +1159,7 @@ function applyCurrentFilter() {
       <div class="track-meta">
         <div class="pop-bar">
           <div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
-          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity)}</span>
+          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity, track)}</span>
         </div>
         <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div>
       </div>
@@ -1189,8 +1219,8 @@ function renderGems() {
 
   function getWhyGem(s) {
     const reasons = [];
-    if (s.track.popularity < 30) reasons.push(`Solo ~${formatListeners(s.track.popularity)} oyentes`);
-    else if (s.track.popularity < 50) reasons.push(`~${formatListeners(s.track.popularity)} oyentes`);
+    if (s.track.popularity < 30) reasons.push(`Solo ${formatListeners(s.track.popularity, s.track)} oyentes`);
+    else if (s.track.popularity < 50) reasons.push(`${formatListeners(s.track.popularity, s.track)} oyentes`);
     if (s.genreRarity > 50) reasons.push('Género muy poco común');
     if (s.ageBonus > 0) reasons.push(`Clásico del ${s.yr}`);
     if (s.rankBonus > 0) reasons.push(`En tu top ${s.rank} — fiel fan`);
@@ -1214,7 +1244,7 @@ function renderGems() {
       </div>
       <div class="gem-why">💎 ${escHtml(getWhyGem(s))}</div>
       <div class="gem-stats">
-        <span class="gem-stat">👥 ${formatListeners(t.popularity)} oyentes est.</span>
+        <span class="gem-stat">👥 ${formatListeners(t.popularity, t)} oyentes est.</span>
         <span class="gem-stat">📅 ${yr}</span>
         <span class="gem-stat">⏱ ${mins}:${secs}</span>
         <span class="gem-stat">🏆 #${s.rank} en tu top</span>
