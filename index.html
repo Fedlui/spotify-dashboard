@@ -138,13 +138,29 @@
   .wrapped-hero { text-align:center; padding:3rem 1rem 2rem; }
   .wrapped-year { font-size:5rem; font-weight:800; letter-spacing:-.05em; background:linear-gradient(135deg,var(--green),var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
   .wrapped-subtitle { font-size:1rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.5rem; }
-  .wrapped-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-bottom:2rem; }
-  .wrapped-card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:2rem; position:relative; overflow:hidden; }
+  .wrapped-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-bottom:2rem; align-items:start; }
+  .wrapped-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:2rem;
+    position:relative; overflow:hidden;
+    transform:scale(1); transition:transform .3s ease, box-shadow .3s ease, border-color .3s ease, background .3s ease;
+    cursor:default;
+  }
+  .wrapped-card:hover {
+    transform:scale(1.03);
+    box-shadow:0 16px 48px rgba(0,0,0,.4);
+    border-color:rgba(255,255,255,.15);
+    background:var(--surface2);
+    z-index:2;
+  }
   .wrapped-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
   .wrapped-card.green::before { background:linear-gradient(90deg,var(--green),transparent); }
+  .wrapped-card.green:hover { border-color:rgba(29,185,84,.4); box-shadow:0 16px 48px rgba(29,185,84,.15); }
   .wrapped-card.purple::before { background:linear-gradient(90deg,var(--accent),transparent); }
+  .wrapped-card.purple:hover { border-color:rgba(192,132,252,.4); box-shadow:0 16px 48px rgba(192,132,252,.15); }
   .wrapped-card.blue::before { background:linear-gradient(90deg,var(--accent2),transparent); }
+  .wrapped-card.blue:hover { border-color:rgba(56,189,248,.4); box-shadow:0 16px 48px rgba(56,189,248,.15); }
   .wrapped-card.yellow::before { background:linear-gradient(90deg,var(--yellow),transparent); }
+  .wrapped-card.yellow:hover { border-color:rgba(251,191,36,.4); box-shadow:0 16px 48px rgba(251,191,36,.15); }
   .wrapped-card-icon { font-size:2.5rem; margin-bottom:1rem; }
   .wrapped-card-label { font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:.5rem; }
   .wrapped-card-value { font-size:1.8rem; font-weight:800; letter-spacing:-.03em; margin-bottom:.25rem; }
@@ -196,6 +212,36 @@
   .rec-pop-label { font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
   .rec-section-title { font-size:.78rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:1rem; margin-top:1.5rem; }
   .rec-section-title:first-child { margin-top:0; }
+  /* FILTERS */
+  .filter-bar { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; margin-bottom:1.5rem; padding:1rem 1.25rem; background:var(--surface); border:1px solid var(--border); border-radius:16px; }
+  .filter-label { font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .filter-chip { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-family:'Syne',sans-serif; font-size:.78rem; font-weight:600; padding:.4rem 1rem; border-radius:100px; cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .filter-chip:hover { border-color:var(--green); color:var(--text); }
+  .filter-chip.active { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .filter-divider { width:1px; height:20px; background:var(--border); flex-shrink:0; }
+  .filter-order { background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.78rem; padding:.4rem .75rem; border-radius:100px; cursor:pointer; outline:none; }
+  .filter-search { background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.82rem; padding:.4rem 1rem; border-radius:100px; outline:none; flex:1; min-width:140px; max-width:220px; transition:border-color .2s; }
+  .filter-search:focus { border-color:var(--green); }
+  .filter-search::placeholder { color:var(--muted); }
+  .tracks-count { font-size:.75rem; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-bottom:.75rem; }
+
+  /* HIDDEN GEMS */
+  .gems-hero { text-align:center; padding:2rem 1rem 1.5rem; }
+  .gems-title { font-size:2rem; font-weight:800; letter-spacing:-.04em; background:linear-gradient(135deg,var(--yellow),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .gems-sub { font-size:.85rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.5rem; }
+  .gems-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
+  .gem-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.25rem; display:flex; flex-direction:column; gap:.75rem; transition:all .2s; position:relative; overflow:hidden; }
+  .gem-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--yellow),var(--accent),transparent); }
+  .gem-card:hover { transform:translateY(-3px); box-shadow:0 12px 40px rgba(251,191,36,.15); border-color:rgba(251,191,36,.3); }
+  .gem-header { display:flex; align-items:center; gap:.875rem; }
+  .gem-cover { width:56px; height:56px; border-radius:10px; object-fit:cover; flex-shrink:0; }
+  .gem-cover-ph { width:56px; height:56px; border-radius:10px; background:rgba(251,191,36,.1); display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex-shrink:0; }
+  .gem-info { flex:1; min-width:0; }
+  .gem-name { font-size:.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gem-artist { font-size:.78rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.15rem; }
+  .gem-why { font-size:.75rem; color:var(--yellow); font-family:'JetBrains Mono',monospace; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.2); border-radius:8px; padding:.4rem .75rem; }
+  .gem-stats { display:flex; gap:.75rem; flex-wrap:wrap; }
+  .gem-stat { font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); background:var(--surface2); padding:.25rem .6rem; border-radius:6px; }
   .hidden { display:none !important; }
   .toast { position:fixed; bottom:2rem; right:2rem; background:var(--surface); border:1px solid var(--green); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.82rem; padding:.875rem 1.5rem; border-radius:12px; z-index:1000; opacity:0; transform:translateY(20px); transition:all .3s; }
   .toast.show { opacity:1; transform:translateY(0); }
@@ -281,13 +327,43 @@
       <button class="nav-tab active" onclick="showTab('tracks',this)">🎵 Mis Canciones</button>
       <button class="nav-tab" onclick="showTab('wrapped',this)">🎁 Mi Wrapped</button>
       <button class="nav-tab" onclick="showTab('recs',this)">🔭 Descubre</button>
+      <button class="nav-tab" onclick="showTab('gems',this)">💎 Gemas</button>
     </div>
 
     <!-- TRACKS TAB -->
     <div id="tracks-tab">
       <div class="stats-row" id="stats-row"></div>
+
+      <!-- FILTER BAR -->
+      <div class="filter-bar">
+        <span class="filter-label">Ordenar:</span>
+        <button class="filter-chip active" onclick="applyFilter('rank',this)">🏆 Mi Top</button>
+        <button class="filter-chip" onclick="applyFilter('popularity',this)">🔥 Oyentes</button>
+        <button class="filter-chip" onclick="applyFilter('year',this)">📅 Año</button>
+        <button class="filter-chip" onclick="applyFilter('duration',this)">⏱ Duración</button>
+        <button class="filter-chip" onclick="applyFilter('bpm',this)">🥁 BPM</button>
+        <button class="filter-chip" onclick="applyFilter('name',this)">🔤 A-Z</button>
+        <div class="filter-divider"></div>
+        <select class="filter-order" id="filter-order" onchange="applyCurrentFilter()">
+          <option value="desc">↓ Mayor a menor</option>
+          <option value="asc">↑ Menor a mayor</option>
+        </select>
+        <div class="filter-divider"></div>
+        <input class="filter-search" id="filter-search" placeholder="🔍 Buscar canción..." oninput="applyCurrentFilter()">
+      </div>
+
+      <div class="tracks-count" id="tracks-count"></div>
       <p class="section-title">Top Canciones — <span id="range-label">Último mes</span></p>
       <div class="tracks-grid" id="tracks-grid"></div>
+    </div>
+
+    <!-- GEMS TAB -->
+    <div id="gems-tab" class="hidden">
+      <div class="gems-hero">
+        <div class="gems-title">💎 Tus Gemas Escondidas</div>
+        <div class="gems-sub">Canciones únicas que pocas personas conocen — tu gusto musical secreto</div>
+      </div>
+      <div id="gems-grid" class="gems-grid"></div>
     </div>
 
     <!-- RECS TAB -->
@@ -436,8 +512,10 @@ function showTab(tab, btn) {
   document.getElementById('tracks-tab').classList.toggle('hidden', tab !== 'tracks');
   document.getElementById('wrapped-tab').classList.toggle('hidden', tab !== 'wrapped');
   document.getElementById('recs-tab').classList.toggle('hidden', tab !== 'recs');
+  document.getElementById('gems-tab').classList.toggle('hidden', tab !== 'gems');
   if (tab === 'wrapped') renderWrapped();
   if (tab === 'recs') loadRecommendations();
+  if (tab === 'gems') renderGems();
 }
 
 // ===== LOAD DATA =====
@@ -461,6 +539,7 @@ async function loadData() {
 
     renderStats();
     renderTracks();
+    document.getElementById('tracks-count').textContent = `${tracksData.length} canciones cargadas`;
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('content').classList.remove('hidden');
   } catch(e) {
@@ -554,7 +633,7 @@ function renderStats() {
 
   document.getElementById('stats-row').innerHTML = [
     {label:'Canciones',value:tracksData.length,sub:'en tu top'},
-    {label:'Popularidad avg',value:avgPop,sub:'de 100'},
+    {label:'Oyentes avg',value:avgPop,sub:'qué tan escuchada'},
     {label:'BPM promedio',value:avgBpm,sub:'beats/min'},
     {label:'Duración avg',value:`${durMin}:${durSec}`,sub:'por canción'},
     {label:'Géneros únicos',value:genres.length,sub:'estilos musicales'},
@@ -601,7 +680,7 @@ function renderTrackDetails(track, mins, secs) {
     {label:'Tonalidad',value:audio.key||'—'},
     {label:'Modo',value:audio.mode||'—'},
     {label:'Volumen',value:audio.loudness||'—'},
-    {label:'Popularidad',value:track.popularity!=null?`${track.popularity}/100`:'—'},
+    {label:'Oyentes',value:track.popularity!=null?`${track.popularity}/100`:'—'},
     {label:'Álbum',value:track.album?.name||'—'},
   ];
   return `
@@ -771,6 +850,7 @@ function fetchLyrics(trackId, trackName, artistName) {
 function setRange(range, btn) {
   currentRange = range;
   recsLoaded = false;
+  gemsRendered = false;
   sessionStorage.setItem('sp_range', range);
   updateRangeButtons(range);
   document.getElementById('loading').classList.remove('hidden');
@@ -946,6 +1026,182 @@ async function loadRecommendations() {
     loading.classList.add('hidden');
     document.getElementById('recs-content').innerHTML = `<div class="error-box">Error: ${e.message}</div>`;
   }
+}
+
+// ===== FILTER =====
+let currentFilter = 'rank';
+
+function applyFilter(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  applyCurrentFilter();
+}
+
+function applyCurrentFilter() {
+  const order = document.getElementById('filter-order').value;
+  const search = (document.getElementById('filter-search').value || '').toLowerCase().trim();
+  const asc = order === 'asc';
+
+  let sorted = [...tracksData];
+
+  // Search filter
+  if (search) {
+    sorted = sorted.filter(t =>
+      t.name.toLowerCase().includes(search) ||
+      t.artists.some(a => a.name.toLowerCase().includes(search)) ||
+      (t._genres||[]).some(g => g.toLowerCase().includes(search))
+    );
+  }
+
+  // Sort
+  switch(currentFilter) {
+    case 'rank':
+      // original index
+      sorted.sort((a,b) => asc ? tracksData.indexOf(b)-tracksData.indexOf(a) : tracksData.indexOf(a)-tracksData.indexOf(b));
+      break;
+    case 'popularity':
+      sorted.sort((a,b) => asc ? (a.popularity||0)-(b.popularity||0) : (b.popularity||0)-(a.popularity||0));
+      break;
+    case 'year':
+      sorted.sort((a,b) => {
+        const ya = parseInt(a.album?.release_date)||0, yb = parseInt(b.album?.release_date)||0;
+        return asc ? ya-yb : yb-ya;
+      });
+      break;
+    case 'duration':
+      sorted.sort((a,b) => asc ? a.duration_ms-b.duration_ms : b.duration_ms-a.duration_ms);
+      break;
+    case 'bpm':
+      sorted.sort((a,b) => {
+        const ba = a._audio?.bpm||0, bb = b._audio?.bpm||0;
+        return asc ? ba-bb : bb-ba;
+      });
+      break;
+    case 'name':
+      sorted.sort((a,b) => asc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+      break;
+  }
+
+  const count = document.getElementById('tracks-count');
+  count.textContent = `${sorted.length} canción${sorted.length!==1?'es':''} ${search?'encontradas':''}`;
+
+  const grid = document.getElementById('tracks-grid');
+  grid.innerHTML = sorted.map((track, i) => {
+    const origRank = tracksData.indexOf(track) + 1;
+    const cover = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url;
+    const mins = Math.floor(track.duration_ms/60000);
+    const secs = Math.floor((track.duration_ms%60000)/1000).toString().padStart(2,'0');
+    return `
+    <div class="track-card" id="track-${track.id}" onclick="toggleTrack('${track.id}')">
+      <div class="track-rank ${origRank<=3?'top3':''}">${origRank<=3?['🥇','🥈','🥉'][origRank-1]:origRank}</div>
+      ${cover?`<img class="track-cover" src="${cover}" alt="${escHtml(track.name)}" loading="lazy">`:`<div class="track-cover-placeholder">♪</div>`}
+      <div class="track-info">
+        <div class="track-name">${escHtml(track.name)}</div>
+        <div class="track-artist">${track.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+        ${(track._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+      </div>
+      <div class="track-meta">
+        <div class="pop-bar">
+          <div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
+          <span class="pop-num">${track.popularity??'—'}</span>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div>
+      </div>
+      <div class="track-details" id="details-${track.id}">${renderTrackDetails(track,mins,secs)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ===== GEMS =====
+let gemsRendered = false;
+
+function renderGems() {
+  if (gemsRendered) return;
+  if (!tracksData.length) return;
+
+  // Score each track for "hidden gem" quality
+  const genreFreq = {};
+  tracksData.forEach(t => (t._genres||[]).forEach(g => { genreFreq[g] = (genreFreq[g]||0)+1; }));
+  const totalGenres = tracksData.length;
+
+  const scored = tracksData.map(t => {
+    const pop = t.popularity || 0;
+    const genres = t._genres || [];
+    const yr = parseInt(t.album?.release_date?.split('-')[0]) || 2000;
+    const rank = tracksData.indexOf(t) + 1;
+
+    // Low popularity = more hidden
+    const listenerScore = Math.max(0, 100 - pop);
+
+    // Rare genres = more unique
+    const genreRarity = genres.length
+      ? genres.reduce((s,g) => s + (1 - (genreFreq[g]||0)/totalGenres), 0) / genres.length * 100
+      : 0;
+
+    // Being deep in the list but still there = hidden loyalty
+    const rankBonus = rank > 50 ? 20 : rank > 20 ? 10 : 0;
+
+    // Older tracks that you still listen to = timeless gem
+    const ageBonus = yr < 2010 ? 15 : yr < 2000 ? 25 : 0;
+
+    const gemScore = listenerScore * 0.5 + genreRarity * 0.3 + rankBonus + ageBonus;
+
+    return { track: t, score: gemScore, listenerScore, genreRarity, rankBonus, ageBonus, rank, yr };
+  });
+
+  // Get top gems — must have pop < 60 or very rare genre
+  const gems = scored
+    .filter(s => s.track.popularity < 60 || s.genreRarity > 40)
+    .sort((a,b) => b.score - a.score)
+    .slice(0, 20);
+
+  if (!gems.length) {
+    document.getElementById('gems-grid').innerHTML = '<div class="error-box" style="grid-column:1/-1">No encontramos gemas — todas tus canciones son muy populares 🔥</div>';
+    gemsRendered = true;
+    return;
+  }
+
+  function getWhyGem(s) {
+    const reasons = [];
+    if (s.track.popularity < 30) reasons.push(`Solo ${s.track.popularity}/100 de oyentes`);
+    else if (s.track.popularity < 50) reasons.push(`Pocos oyentes: ${s.track.popularity}/100`);
+    if (s.genreRarity > 50) reasons.push('Género muy poco común');
+    if (s.ageBonus > 0) reasons.push(`Clásico del ${s.yr}`);
+    if (s.rankBonus > 0) reasons.push(`En tu top ${s.rank} — fiel fan`);
+    return reasons.slice(0,2).join(' · ') || 'Gusto único';
+  }
+
+  document.getElementById('gems-grid').innerHTML = gems.map(s => {
+    const t = s.track;
+    const cover = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url;
+    const mins = Math.floor(t.duration_ms/60000);
+    const secs = Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
+    const yr = t.album?.release_date?.split('-')[0] || '—';
+    return `
+    <div class="gem-card">
+      <div class="gem-header">
+        ${cover ? `<img class="gem-cover" src="${cover}" alt="${escHtml(t.name)}" loading="lazy">` : `<div class="gem-cover-ph">💎</div>`}
+        <div class="gem-info">
+          <div class="gem-name">${escHtml(t.name)}</div>
+          <div class="gem-artist">${t.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+        </div>
+      </div>
+      <div class="gem-why">💎 ${escHtml(getWhyGem(s))}</div>
+      <div class="gem-stats">
+        <span class="gem-stat">👥 Oyentes: ${t.popularity??'—'}</span>
+        <span class="gem-stat">📅 ${yr}</span>
+        <span class="gem-stat">⏱ ${mins}:${secs}</span>
+        <span class="gem-stat">🏆 #${s.rank} en tu top</span>
+      </div>
+      ${(t._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+      <div onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden;margin-top:.25rem">
+        <iframe src="https://open.spotify.com/embed/track/${t.id}?utm_source=generator&theme=0" width="100%" height="80" frameBorder="0" allow="autoplay;clipboard-write;encrypted-media;fullscreen;picture-in-picture" loading="lazy" style="border-radius:10px;display:block;"></iframe>
+      </div>
+    </div>`;
+  }).join('');
+
+  gemsRendered = true;
 }
 
 function escHtml(str) {
