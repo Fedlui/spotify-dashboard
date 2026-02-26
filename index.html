@@ -1175,57 +1175,71 @@ function renderGems() {
   if (gemsRendered) return;
   if (!tracksData.length) return;
 
-  // Score each track for "hidden gem" quality
-  const genreFreq = {};
-  tracksData.forEach(t => (t._genres||[]).forEach(g => { genreFreq[g] = (genreFreq[g]||0)+1; }));
-  const totalGenres = tracksData.length;
+  // El criterio principal para una gema es: POCOS OYENTES reales
+  // Usamos _listeners de Last.fm si está disponible, sino estimamos desde popularity
 
-  const scored = tracksData.map(t => {
-    const pop = t.popularity || 0;
-    const genres = t._genres || [];
+  // Calcular el máximo de oyentes para normalizar
+  const listenerCounts = tracksData.map(t => t._listeners || Math.round(1000 * Math.exp((t.popularity||0) * 0.115)));
+  const maxListeners = Math.max(...listenerCounts);
+  const avgListeners = listenerCounts.reduce((a,b)=>a+b,0) / listenerCounts.length;
+
+  const scored = tracksData.map((t, idx) => {
+    const rank = idx + 1;
     const yr = parseInt(t.album?.release_date?.split('-')[0]) || 2000;
-    const rank = tracksData.indexOf(t) + 1;
+    // Oyentes reales o estimados
+    const listeners = t._listeners || Math.round(1000 * Math.exp((t.popularity||0) * 0.115));
 
-    // Low popularity = more hidden
-    const listenerScore = Math.max(0, 100 - pop);
+    // FACTOR PRINCIPAL: qué tan por debajo del promedio están sus oyentes (0-100)
+    // Canción con oyentes muy bajos vs el promedio de tu lista = más gema
+    const listenerRatio = listeners / avgListeners; // < 1 = menos oyentes que el promedio
+    const listenerScore = Math.max(0, Math.min(100, (1 - listenerRatio) * 100 + 50));
 
-    // Rare genres = more unique
-    const genreRarity = genres.length
-      ? genres.reduce((s,g) => s + (1 - (genreFreq[g]||0)/totalGenres), 0) / genres.length * 100
-      : 0;
+    // FACTOR SECUNDARIO: estar profundo en tu lista pero seguir ahí = lealtad oculta
+    const loyaltyScore = rank > 100 ? 25 : rank > 50 ? 15 : rank > 20 ? 8 : 0;
 
-    // Being deep in the list but still there = hidden loyalty
-    const rankBonus = rank > 50 ? 20 : rank > 20 ? 10 : 0;
+    // FACTOR TERCIARIO: año antiguo que sigues escuchando
+    const ageScore = yr < 1990 ? 20 : yr < 2000 ? 15 : yr < 2010 ? 8 : 0;
 
-    // Older tracks that you still listen to = timeless gem
-    const ageBonus = yr < 2010 ? 15 : yr < 2000 ? 25 : 0;
+    const gemScore = listenerScore * 0.70 + loyaltyScore + ageScore;
 
-    const gemScore = listenerScore * 0.5 + genreRarity * 0.3 + rankBonus + ageBonus;
-
-    return { track: t, score: gemScore, listenerScore, genreRarity, rankBonus, ageBonus, rank, yr };
+    return { track: t, score: gemScore, listeners, rank, yr, listenerRatio };
   });
 
-  // Get top gems — must have pop < 60 or very rare genre
+  // Gemas = canciones con menos oyentes que el promedio de TU lista
+  // Ordenadas de menor a mayor oyentes (las más escondidas primero)
   const gems = scored
-    .filter(s => s.track.popularity < 60 || s.genreRarity > 40)
-    .sort((a,b) => b.score - a.score)
+    .filter(s => s.listeners < avgListeners) // menos oyentes que tu promedio
+    .sort((a,b) => a.listeners - b.listeners) // las más escondidas primero
     .slice(0, 20);
 
   if (!gems.length) {
-    document.getElementById('gems-grid').innerHTML = '<div class="error-box" style="grid-column:1/-1">No encontramos gemas — todas tus canciones son muy populares 🔥</div>';
+    document.getElementById('gems-grid').innerHTML = `
+      <div class="error-box" style="grid-column:1/-1">
+        ¡Todas tus canciones tienen muchos oyentes! Tu gusto es muy mainstream 🔥<br>
+        <small>Promedio de oyentes en tu lista: ${formatNum(Math.round(avgListeners))}</small>
+      </div>`;
     gemsRendered = true;
     return;
   }
 
   function getWhyGem(s) {
     const reasons = [];
-    if (s.track.popularity < 30) reasons.push(`Solo ${formatListeners(s.track.popularity, s.track)} oyentes`);
-    else if (s.track.popularity < 50) reasons.push(`${formatListeners(s.track.popularity, s.track)} oyentes`);
-    if (s.genreRarity > 50) reasons.push('Género muy poco común');
-    if (s.ageBonus > 0) reasons.push(`Clásico del ${s.yr}`);
-    if (s.rankBonus > 0) reasons.push(`En tu top ${s.rank} — fiel fan`);
-    return reasons.slice(0,2).join(' · ') || 'Gusto único';
+    const vsAvg = Math.round((1 - s.listenerRatio) * 100);
+    if (s.listeners < 100000) reasons.push(`Solo ${formatNum(s.listeners)} oyentes`);
+    else if (s.listeners < 1000000) reasons.push(`${formatNum(s.listeners)} oyentes — bajo en tu lista`);
+    else reasons.push(`${vsAvg}% menos oyentes que tu promedio`);
+    if (s.ageScore > 10) reasons.push(`Clásico del ${s.yr} que pocas personas ponen`);
+    else if (s.rank > 50) reasons.push(`En tu top ${s.rank} — fiel fan secreto`);
+    return reasons.slice(0,2).join(' · ') || 'Joya escondida';
   }
+
+  // Header con contexto
+  document.getElementById('gems-grid').insertAdjacentHTML('beforebegin', `
+    <div style="background:var(--surface);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:1rem 1.5rem;margin-bottom:1.5rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--muted);">
+      💡 Tu promedio de oyentes es <strong style="color:var(--yellow)">${formatNum(Math.round(avgListeners))}</strong> — 
+      estas ${gems.length} canciones están muy por debajo de eso. Son tus joyas escondidas.
+    </div>
+  `);
 
   document.getElementById('gems-grid').innerHTML = gems.map(s => {
     const t = s.track;
@@ -1233,6 +1247,7 @@ function renderGems() {
     const mins = Math.floor(t.duration_ms/60000);
     const secs = Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
     const yr = t.album?.release_date?.split('-')[0] || '—';
+    const listenerLabel = t._listeners ? formatNum(t._listeners) + ' (Last.fm)' : formatNum(s.listeners) + ' ~est';
     return `
     <div class="gem-card">
       <div class="gem-header">
@@ -1244,10 +1259,10 @@ function renderGems() {
       </div>
       <div class="gem-why">💎 ${escHtml(getWhyGem(s))}</div>
       <div class="gem-stats">
-        <span class="gem-stat">👥 ${formatListeners(t.popularity, t)} oyentes est.</span>
+        <span class="gem-stat" style="color:var(--yellow)">👥 ${listenerLabel}</span>
         <span class="gem-stat">📅 ${yr}</span>
         <span class="gem-stat">⏱ ${mins}:${secs}</span>
-        <span class="gem-stat">🏆 #${s.rank} en tu top</span>
+        <span class="gem-stat">🏆 #${s.rank}</span>
       </div>
       ${(t._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
       <div onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden;margin-top:.25rem">
