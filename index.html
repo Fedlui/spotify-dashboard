@@ -338,7 +338,7 @@
       <div class="filter-bar">
         <span class="filter-label">Ordenar:</span>
         <button class="filter-chip active" onclick="applyFilter('rank',this)">🏆 Mi Top</button>
-        <button class="filter-chip" onclick="applyFilter('popularity',this)">🔥 Oyentes</button>
+        <button class="filter-chip" onclick="applyFilter('popularity',this)">👥 Oyentes</button>
         <button class="filter-chip" onclick="applyFilter('year',this)">📅 Año</button>
         <button class="filter-chip" onclick="applyFilter('duration',this)">⏱ Duración</button>
         <button class="filter-chip" onclick="applyFilter('bpm',this)">🥁 BPM</button>
@@ -407,6 +407,25 @@ let accessToken = null;
 let tracksData = [];
 let audioFeaturesData = {};
 let currentRange = 'short_term';
+
+// ===== LISTENERS ESTIMATOR =====
+// Spotify popularity 0-100 → estimated real listeners (monthly approx)
+function estimateListeners(pop) {
+  if (pop == null) return null;
+  // Exponential scale: pop 100 ~ 80M monthly, pop 0 ~ 1K
+  // Formula: listeners = 1000 * e^(pop * 0.115)
+  const est = Math.round(1000 * Math.exp(pop * 0.115));
+  return est;
+}
+
+function formatListeners(pop) {
+  const n = estimateListeners(pop);
+  if (!n) return '—';
+  if (n >= 1_000_000_000) return (n/1_000_000_000).toFixed(1) + 'B';
+  if (n >= 1_000_000) return (n/1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n/1_000).toFixed(0) + 'K';
+  return n.toString();
+}
 
 // ===== PKCE =====
 function generateRandom(length) {
@@ -633,7 +652,7 @@ function renderStats() {
 
   document.getElementById('stats-row').innerHTML = [
     {label:'Canciones',value:tracksData.length,sub:'en tu top'},
-    {label:'Oyentes avg',value:avgPop,sub:'qué tan escuchada'},
+    {label:'Oyentes avg',value:formatListeners(avgPop),sub:'oyentes estimados'},
     {label:'BPM promedio',value:avgBpm,sub:'beats/min'},
     {label:'Duración avg',value:`${durMin}:${durSec}`,sub:'por canción'},
     {label:'Géneros únicos',value:genres.length,sub:'estilos musicales'},
@@ -660,7 +679,7 @@ function renderTracks() {
       <div class="track-meta">
         <div class="pop-bar">
           <div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
-          <span class="pop-num">${track.popularity??'—'}</span>
+          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity)}</span>
         </div>
         <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div>
       </div>
@@ -680,7 +699,7 @@ function renderTrackDetails(track, mins, secs) {
     {label:'Tonalidad',value:audio.key||'—'},
     {label:'Modo',value:audio.mode||'—'},
     {label:'Volumen',value:audio.loudness||'—'},
-    {label:'Oyentes',value:track.popularity!=null?`${track.popularity}/100`:'—'},
+    {label:'Oyentes',value:track.popularity!=null?`${formatListeners(track.popularity)} (~${track.popularity}/100)`:'—'},
     {label:'Álbum',value:track.album?.name||'—'},
   ];
   return `
@@ -810,7 +829,7 @@ function renderWrapped() {
             ${cover?`<img class="wrapped-thumb" src="${cover}" alt="">`:`<div class="wrapped-thumb-placeholder">♪</div>`}
             <div class="wrapped-item-info">
               <div class="wrapped-item-name">${escHtml(t.name)}</div>
-              <div class="wrapped-item-sub">${escHtml(t.artists[0]?.name||'')} · ${t.popularity??'—'} popularidad</div>
+              <div class="wrapped-item-sub">${escHtml(t.artists[0]?.name||'')} · ${formatListeners(t.popularity)} oyentes</div>
             </div>
           </li>`;}).join('')}
       </ul>
@@ -874,7 +893,7 @@ function exportData() {
     return {
       track_name:t.name, artist_name:t.artists.map(a=>a.name).join(', '),
       released_year:t.album?.release_date?.split('-')[0]||null,
-      popularidad:t.popularity, duration:`${mins}:${secs}`, duration_ms:t.duration_ms,
+      popularidad_index:t.popularity, oyentes_estimados:formatListeners(t.popularity), duration:`${mins}:${secs}`, duration_ms:t.duration_ms,
       bpm:t._audio?.bpm||null, signature:t._audio?.time_signature||null,
       loudness:t._audio?.loudness||null, key:t._audio?.key||null, mode:t._audio?.mode||null,
       danceability:null, valence:null, energy:null, acousticness:null,
@@ -1164,8 +1183,8 @@ function renderGems() {
 
   function getWhyGem(s) {
     const reasons = [];
-    if (s.track.popularity < 30) reasons.push(`Solo ${s.track.popularity}/100 de oyentes`);
-    else if (s.track.popularity < 50) reasons.push(`Pocos oyentes: ${s.track.popularity}/100`);
+    if (s.track.popularity < 30) reasons.push(`Solo ~${formatListeners(s.track.popularity)} oyentes`);
+    else if (s.track.popularity < 50) reasons.push(`~${formatListeners(s.track.popularity)} oyentes`);
     if (s.genreRarity > 50) reasons.push('Género muy poco común');
     if (s.ageBonus > 0) reasons.push(`Clásico del ${s.yr}`);
     if (s.rankBonus > 0) reasons.push(`En tu top ${s.rank} — fiel fan`);
@@ -1189,7 +1208,7 @@ function renderGems() {
       </div>
       <div class="gem-why">💎 ${escHtml(getWhyGem(s))}</div>
       <div class="gem-stats">
-        <span class="gem-stat">👥 Oyentes: ${t.popularity??'—'}</span>
+        <span class="gem-stat">👥 ${formatListeners(t.popularity)} oyentes est.</span>
         <span class="gem-stat">📅 ${yr}</span>
         <span class="gem-stat">⏱ ${mins}:${secs}</span>
         <span class="gem-stat">🏆 #${s.rank} en tu top</span>
