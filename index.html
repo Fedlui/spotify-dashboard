@@ -420,8 +420,11 @@ function estimateListeners(pop) {
 }
 
 function formatListeners(pop) {
-  const n = estimateListeners(pop);
-  if (n === null || n === undefined) return '—';
+  // Handle all edge cases: undefined, null, empty string, NaN
+  if (pop === undefined || pop === null || pop === '' || pop === false) return '—';
+  const p = Number(pop);
+  if (isNaN(p)) return '—';
+  const n = Math.round(1000 * Math.exp(p * 0.115));
   if (n >= 1000000000) return (n/1000000000).toFixed(1) + 'B';
   if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
   if (n >= 1000) return Math.round(n/1000) + 'K';
@@ -553,6 +556,8 @@ async function loadData() {
     }
     const seen = new Set();
     tracksData = allTracks.filter(t => seen.has(t.id) ? false : seen.add(t.id));
+    // Asegurar que popularity siempre sea un número
+    tracksData.forEach(t => { if (t.popularity === undefined || t.popularity === null) t.popularity = 0; });
 
     document.querySelector('.loading-text').textContent = 'Obteniendo géneros y BPM...';
     await fetchEnrichedData();
@@ -700,7 +705,7 @@ function renderTrackDetails(track, mins, secs) {
     {label:'Tonalidad',value:audio.key||'—'},
     {label:'Modo',value:audio.mode||'—'},
     {label:'Volumen',value:audio.loudness||'—'},
-    {label:'Oyentes',value:track.popularity!=null?`${formatListeners(track.popularity)} (~${track.popularity}/100)`:'—'},
+    {label:'Oyentes',value:formatListeners(track.popularity)==='—'?'—':`${formatListeners(track.popularity)} (índice: ${track.popularity??'?'}/100)`},
     {label:'Álbum',value:track.album?.name||'—'},
   ];
   return `
