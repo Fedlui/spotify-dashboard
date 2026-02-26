@@ -412,19 +412,19 @@ let currentRange = 'short_term';
 // ===== LISTENERS ESTIMATOR =====
 // Spotify popularity 0-100 → estimated real listeners (monthly approx)
 function estimateListeners(pop) {
-  if (pop == null) return null;
-  // Exponential scale: pop 100 ~ 80M monthly, pop 0 ~ 1K
-  // Formula: listeners = 1000 * e^(pop * 0.115)
-  const est = Math.round(1000 * Math.exp(pop * 0.115));
-  return est;
+  // pop puede venir como string, number, null o undefined
+  const p = parseInt(pop);
+  if (isNaN(p)) return null;
+  // Escala exponencial: pop 100 ~ 80M, pop 50 ~ 1.2M, pop 20 ~ 18K, pop 0 ~ 1K
+  return Math.round(1000 * Math.exp(p * 0.115));
 }
 
 function formatListeners(pop) {
   const n = estimateListeners(pop);
-  if (!n) return '—';
-  if (n >= 1_000_000_000) return (n/1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000) return (n/1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n/1_000).toFixed(0) + 'K';
+  if (n === null || n === undefined) return '—';
+  if (n >= 1000000000) return (n/1000000000).toFixed(1) + 'B';
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return Math.round(n/1000) + 'K';
   return n.toString();
 }
 
@@ -643,7 +643,7 @@ function renderUser(profile) {
 
 // ===== RENDER STATS =====
 function renderStats() {
-  const avgPop = tracksData.length ? Math.round(tracksData.reduce((s,t)=>s+t.popularity,0)/tracksData.length) : 0;
+  const avgPop = tracksData.length ? Math.round(tracksData.reduce((s,t)=>s+(t.popularity||0),0)/tracksData.length) : null;
   const genres = [...new Set(tracksData.flatMap(t=>t._genres||[]))];
   const avgDur = tracksData.length ? Math.round(tracksData.reduce((s,t)=>s+t.duration_ms,0)/tracksData.length/1000) : 0;
   const durMin = Math.floor(avgDur/60), durSec=(avgDur%60).toString().padStart(2,'0');
