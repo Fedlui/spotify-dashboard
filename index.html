@@ -164,11 +164,13 @@
   .genre-bar-wrap { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
   .genre-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,var(--green),var(--accent)); transition:width 1s ease; }
   .genre-pct { font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); min-width:35px; text-align:right; }
-  .decade-chart { display:flex; gap:.5rem; align-items:flex-end; height:80px; margin-top:1rem; }
-  .decade-bar { flex:1; background:var(--green-dim); border:1px solid var(--green-glow); border-radius:4px 4px 0 0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:.25rem; transition:height 1s ease; cursor:default; position:relative; }
-  .decade-bar:hover { background:var(--green-dim); border-color:var(--green); }
-  .decade-bar span { font-size:.6rem; font-family:'JetBrains Mono',monospace; color:var(--muted); }
-  .decade-label { font-size:.6rem; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-top:.25rem; text-align:center; }
+  .decade-chart { display:flex; gap:.75rem; align-items:flex-end; height:120px; margin-top:1.25rem; padding:0 .25rem; }
+  .decade-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:.4rem; }
+  .decade-bar-wrap { width:100%; display:flex; align-items:flex-end; height:80px; }
+  .decade-bar { width:100%; background:linear-gradient(180deg,var(--green),rgba(29,185,84,.3)); border-radius:6px 6px 0 0; transition:height .8s ease; position:relative; min-height:8px; }
+  .decade-bar:hover { background:linear-gradient(180deg,#22e065,rgba(34,224,101,.4)); }
+  .decade-cnt { font-size:.7rem; font-family:'JetBrains Mono',monospace; color:var(--green); font-weight:600; }
+  .decade-label { font-size:.65rem; font-family:'JetBrains Mono',monospace; color:var(--muted); }
 
   /* LOADING */
   .loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:5rem; gap:1.5rem; }
@@ -179,6 +181,21 @@
 
   /* MISC */
   .error-box { background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.3); border-radius:12px; padding:1.25rem; font-family:'JetBrains Mono',monospace; font-size:.82rem; color:var(--red); margin:1rem 0; }
+  /* RECOMMENDATIONS */
+  .rec-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; }
+  .rec-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.25rem; display:flex; flex-direction:column; gap:.75rem; transition:all .2s; }
+  .rec-card:hover { border-color:rgba(29,185,84,.3); transform:translateY(-2px); }
+  .rec-header { display:flex; align-items:center; gap:.875rem; }
+  .rec-cover { width:56px; height:56px; border-radius:10px; object-fit:cover; flex-shrink:0; }
+  .rec-cover-ph { width:56px; height:56px; border-radius:10px; background:var(--green-dim); display:flex; align-items:center; justify-content:center; color:var(--green); font-size:1.4rem; flex-shrink:0; }
+  .rec-info { flex:1; min-width:0; }
+  .rec-name { font-size:.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rec-artist { font-size:.78rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.15rem; }
+  .rec-reason { font-size:.75rem; color:var(--accent); font-family:'JetBrains Mono',monospace; background:rgba(192,132,252,.1); border:1px solid rgba(192,132,252,.2); border-radius:8px; padding:.4rem .75rem; }
+  .rec-pop { display:flex; align-items:center; gap:.5rem; }
+  .rec-pop-label { font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .rec-section-title { font-size:.78rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:1rem; margin-top:1.5rem; }
+  .rec-section-title:first-child { margin-top:0; }
   .hidden { display:none !important; }
   .toast { position:fixed; bottom:2rem; right:2rem; background:var(--surface); border:1px solid var(--green); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.82rem; padding:.875rem 1.5rem; border-radius:12px; z-index:1000; opacity:0; transform:translateY(20px); transition:all .3s; }
   .toast.show { opacity:1; transform:translateY(0); }
@@ -263,6 +280,7 @@
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="showTab('tracks',this)">🎵 Mis Canciones</button>
       <button class="nav-tab" onclick="showTab('wrapped',this)">🎁 Mi Wrapped</button>
+      <button class="nav-tab" onclick="showTab('recs',this)">🔭 Descubre</button>
     </div>
 
     <!-- TRACKS TAB -->
@@ -270,6 +288,15 @@
       <div class="stats-row" id="stats-row"></div>
       <p class="section-title">Top Canciones — <span id="range-label">Último mes</span></p>
       <div class="tracks-grid" id="tracks-grid"></div>
+    </div>
+
+    <!-- RECS TAB -->
+    <div id="recs-tab" class="hidden">
+      <div id="recs-loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p class="loading-text">Buscando canciones para ti...</p>
+      </div>
+      <div id="recs-content"></div>
     </div>
 
     <!-- WRAPPED TAB -->
@@ -408,7 +435,9 @@ function showTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById('tracks-tab').classList.toggle('hidden', tab !== 'tracks');
   document.getElementById('wrapped-tab').classList.toggle('hidden', tab !== 'wrapped');
+  document.getElementById('recs-tab').classList.toggle('hidden', tab !== 'recs');
   if (tab === 'wrapped') renderWrapped();
+  if (tab === 'recs') loadRecommendations();
 }
 
 // ===== LOAD DATA =====
@@ -714,9 +743,10 @@ function renderWrapped() {
       <div class="wrapped-card-label">Música por décadas</div>
       <div class="decade-chart">
         ${sortedDecades.map(([dec,cnt])=>`
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center">
-            <div class="decade-bar" style="width:100%;height:${Math.round(cnt/maxDec*70)+10}px;background:var(--green-dim);border:1px solid var(--green-glow);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center">
-              <span style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--green)">${cnt}</span>
+          <div class="decade-col">
+            <span class="decade-cnt">${cnt}</span>
+            <div class="decade-bar-wrap">
+              <div class="decade-bar" style="height:${Math.round(cnt/maxDec*76)+4}px"></div>
             </div>
             <span class="decade-label">${dec}s</span>
           </div>`).join('')}
@@ -742,6 +772,7 @@ function fetchLyrics(trackId, trackName, artistName) {
 
 function setRange(range, btn) {
   currentRange = range;
+  recsLoaded = false;
   sessionStorage.setItem('sp_range', range);
   updateRangeButtons(range);
   document.getElementById('loading').classList.remove('hidden');
@@ -781,6 +812,121 @@ function exportData() {
   a.href=url; a.download=`spotify-top-${currentRange}.json`;
   a.click(); URL.revokeObjectURL(url);
   showToast('✓ Datos exportados');
+}
+
+// ===== RECOMMENDATIONS =====
+let recsLoaded = false;
+
+async function loadRecommendations() {
+  if (recsLoaded) return;
+  if (!tracksData.length) return;
+
+  const loading = document.getElementById('recs-loading');
+  const container = document.getElementById('recs-content');
+  loading.classList.remove('hidden');
+  container.innerHTML = '';
+
+  try {
+    // Use top 5 track seeds for recommendations
+    const seedTracks = tracksData.slice(0, 5).map(t => t.id).join(',');
+
+    // Fetch 10 recommendations based on top tracks
+    const res = await spotifyFetch(`/recommendations?seed_tracks=${seedTracks}&limit=10`);
+    const recs = res.tracks || [];
+
+    // Also fetch 10 recommendations biased by top genres (via top artists)
+    const topArtistIds = [...new Set(tracksData.slice(0,3).map(t => t.artists[0]?.id))].filter(Boolean).slice(0,3).join(',');
+    const res2 = await spotifyFetch(`/recommendations?seed_artists=${topArtistIds}&limit=10`);
+    const recs2 = res2.tracks || [];
+
+    // Remove duplicates and tracks already in user's top
+    const topIds = new Set(tracksData.map(t => t.id));
+    const allRec = [...recs, ...recs2].filter(t => !topIds.has(t.id));
+    const seen = new Set();
+    const unique = allRec.filter(t => seen.has(t.id) ? false : seen.add(t.id));
+
+    loading.classList.add('hidden');
+
+    if (!unique.length) {
+      container.innerHTML = '<div class="error-box">No se encontraron recomendaciones. Intenta con otro período de tiempo.</div>';
+      return;
+    }
+
+    // Get genres for recommendations via Last.fm
+    const chunks = [];
+    for (let i = 0; i < unique.length; i += 4) chunks.push(unique.slice(i, i+4));
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(async (track) => {
+        try {
+          const artist = encodeURIComponent(track.artists[0]?.name||'');
+          const song = encodeURIComponent(track.name);
+          const lfm = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_KEY}&artist=${artist}&track=${song}&format=json`);
+          if (lfm.ok) {
+            const d = await lfm.json();
+            const tags = d?.track?.toptags?.tag || [];
+            track._genres = tags.slice(0,3).map(t=>t.name).filter(t=>t.toLowerCase()!=='seen live'&&t.length>1);
+          } else { track._genres = []; }
+        } catch(e) { track._genres = []; }
+      }));
+    }
+
+    // Explain why each track is recommended
+    const topGenres = new Set(tracksData.slice(0,10).flatMap(t=>t._genres||[]).slice(0,10));
+    const topArtistNames = new Set(tracksData.slice(0,10).flatMap(t=>t.artists.map(a=>a.name)));
+
+    function getReason(track) {
+      const sharedArtist = track.artists.find(a => topArtistNames.has(a.name));
+      if (sharedArtist) return `Porque escuchas a ${sharedArtist.name}`;
+      const sharedGenre = (track._genres||[]).find(g => topGenres.has(g));
+      if (sharedGenre) return `Tu género: ${sharedGenre}`;
+      return `Basado en tus top ${tracksData.slice(0,5).map(t=>t.name).slice(0,2).join(', ')}`;
+    }
+
+    // Split: based on top tracks vs based on top artists
+    const fromTracks = unique.slice(0, 10);
+    const fromArtists = unique.slice(10, 20);
+
+    function renderRecCards(tracks) {
+      return tracks.map(track => {
+        const cover = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url;
+        const reason = getReason(track);
+        return `
+        <div class="rec-card">
+          <div class="rec-header">
+            ${cover ? `<img class="rec-cover" src="${cover}" alt="${escHtml(track.name)}" loading="lazy">` : `<div class="rec-cover-ph">♪</div>`}
+            <div class="rec-info">
+              <div class="rec-name">${escHtml(track.name)}</div>
+              <div class="rec-artist">${track.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+            </div>
+          </div>
+          <div class="rec-reason">${escHtml(reason)}</div>
+          <div class="rec-pop">
+            <span class="rec-pop-label">Popularidad:</span>
+            <div class="pop-track" style="width:80px"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
+            <span class="pop-num">${track.popularity??'—'}</span>
+          </div>
+          ${(track._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+          <div onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden">
+            <iframe src="https://open.spotify.com/embed/track/${track.id}?utm_source=generator&theme=0" width="100%" height="80" frameBorder="0" allow="autoplay;clipboard-write;encrypted-media;fullscreen;picture-in-picture" loading="lazy" style="border-radius:10px;display:block;"></iframe>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    container.innerHTML = `
+      <p class="rec-section-title">🎵 Basado en tus canciones favoritas</p>
+      <div class="rec-grid">${renderRecCards(fromTracks)}</div>
+      ${fromArtists.length ? `
+      <p class="rec-section-title">🎤 Basado en tus artistas favoritos</p>
+      <div class="rec-grid">${renderRecCards(fromArtists)}</div>` : ''}
+    `;
+
+    recsLoaded = true;
+
+  } catch(e) {
+    loading.classList.add('hidden');
+    document.getElementById('recs-content').innerHTML = `<div class="error-box">Error: ${e.message}</div>`;
+  }
 }
 
 function escHtml(str) {
