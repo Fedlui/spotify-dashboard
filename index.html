@@ -1549,49 +1549,357 @@ const COUNTRY_NAMES = {
   PE:'Perú','DO':'Rep. Dominicana',VE:'Venezuela',EC:'Ecuador',
 };
 
+// Country lat/lon centers for globe markers
+const COUNTRY_COORDS = {
+  US:[37,-95],GB:[52,-1],CA:[56,-106],MX:[23,-102],PR:[18,-66],
+  CO:[4,-74],AR:[-34,-64],BR:[-14,-51],CL:[-30,-71],ES:[40,-3],
+  FR:[46,2],DE:[51,10],SE:[62,15],NO:[65,13],NL:[52,5],BE:[50,4],
+  KR:[37,127],JP:[36,138],AU:[-25,134],CU:[22,-80],BB:[13,-59],
+  TT:[11,-61],PE:[-9,-75],DO:[19,-70],VE:[8,-66],EC:[-1,-78],
+};
+
+let globeInitialized = false;
+let globeScene, globeCamera, globeRenderer, globeSphere, globeAnimId;
+let isDragging = false, prevMouse = {x:0,y:0};
+let globeRotY = 0, globeRotX = 0.3;
+let countryMeshes = {}; // code -> mesh
+let hoveredCountry = null;
+
 function renderMap() {
   if (document.getElementById('map-content').innerHTML.length > 50) return;
-  const countryCount = {};
-  const countryArtists = {};
+
+  // Build country data
+  const countryTracks = {}; // code -> [tracks]
   tracksData.forEach(t => {
     t.artists.forEach(a => {
       const country = ARTIST_COUNTRIES[a.name];
       if (country) {
-        countryCount[country] = (countryCount[country]||0) + 1;
-        if (!countryArtists[country]) countryArtists[country] = new Set();
-        countryArtists[country].add(a.name);
+        if (!countryTracks[country]) countryTracks[country] = [];
+        countryTracks[country].push(t);
       }
     });
   });
 
-  const sorted = Object.entries(countryCount).sort((a,b)=>b[1]-a[1]);
-  const max = sorted[0]?.[1]||1;
-
+  const sorted = Object.entries(countryTracks).sort((a,b)=>b[1].length-a[1].length);
   const unknownArtists = [...new Set(tracksData.flatMap(t=>t.artists.map(a=>a.name)))].filter(a=>!ARTIST_COUNTRIES[a]).slice(0,10);
 
   document.getElementById('map-content').innerHTML = `
-    <div style="margin-bottom:1.5rem;">
-      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">🌍 Mapa de orígenes</h2>
-      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">De dónde viene la música que más escuchas</p>
+    <div style="margin-bottom:1rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.25rem;">🌍 Globo de orígenes</h2>
+      <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Arrastra para girar · Pasa el cursor sobre un país para ver tus canciones</p>
     </div>
-    ${sorted.length === 0 ? '<div class="error-box">No se pudieron identificar los países de tus artistas.</div>' : ''}
-    <div class="country-bar-list">
-      ${sorted.map(([code, count]) => `
-        <div class="country-row">
-          <span class="country-flag">${COUNTRY_FLAGS[code]||'🌐'}</span>
-          <span class="country-name">${COUNTRY_NAMES[code]||code}</span>
-          <div class="country-bar-wrap" style="width:200px">
-            <div class="country-bar-fill" style="width:${Math.round(count/max*100)}%"></div>
-          </div>
-          <span class="country-artists">${count} canciones · ${[...countryArtists[code]].slice(0,3).join(', ')}</span>
-        </div>`).join('')}
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:1.5rem;align-items:start;">
+      <div style="position:relative;">
+        <canvas id="globe-canvas" style="width:100%;border-radius:16px;background:#060810;cursor:grab;display:block;"></canvas>
+        <div id="globe-tooltip" style="position:absolute;top:1rem;left:1rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);background:rgba(6,8,16,.8);padding:.4rem .75rem;border-radius:8px;border:1px solid var(--border);pointer-events:none;">Arrastra para girar</div>
+      </div>
+      <div id="country-card" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.25rem;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <div style="font-size:3rem;margin-bottom:.5rem;">🌐</div>
+        <div style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:center;">Pasa el cursor<br>sobre un país</div>
+      </div>
+    </div>
+    <div style="margin-top:1.5rem;">
+      <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Ranking de países</p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        ${sorted.map(([code,tracks])=>`
+          <div onclick="highlightCountryByCode('${code}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.5rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+            ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${tracks.length}</span>
+          </div>`).join('')}
+      </div>
     </div>
     ${unknownArtists.length ? `
-    <div style="margin-top:1.5rem;padding:1rem 1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;">
-      <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;">Artistas sin país identificado</p>
-      <p style="font-size:.78rem;font-family:'JetBrains Mono',monospace;color:var(--muted)">${unknownArtists.join(', ')}</p>
+    <div style="margin-top:1rem;padding:.875rem 1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;">
+      <p style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem;">Sin país identificado</p>
+      <p style="font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted)">${unknownArtists.join(', ')}</p>
     </div>` : ''}
   `;
+
+  // Store country data globally for hover card
+  window._globeCountryTracks = countryTracks;
+  window._globeSorted = sorted;
+
+  initGlobe(countryTracks, sorted);
+}
+
+function initGlobe(countryTracks, sorted) {
+  if (typeof THREE === 'undefined') {
+    // Load Three.js then init
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload = () => buildGlobe(countryTracks, sorted);
+    document.head.appendChild(s);
+  } else {
+    buildGlobe(countryTracks, sorted);
+  }
+}
+
+function buildGlobe(countryTracks, sorted) {
+  const canvas = document.getElementById('globe-canvas');
+  if (!canvas) return;
+  const W = canvas.parentElement.clientWidth;
+  const H = Math.min(W * 0.75, 520);
+  canvas.width = W;
+  canvas.height = H;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, W/H, 0.1, 1000);
+  camera.position.z = 2.5;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(window.devicePixelRatio||1);
+  renderer.setClearColor(0x000000, 0);
+
+  // Stars
+  const starGeo = new THREE.BufferGeometry();
+  const starVerts = [];
+  for (let i=0; i<2000; i++) {
+    starVerts.push((Math.random()-0.5)*200, (Math.random()-0.5)*200, (Math.random()-0.5)*200);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts,3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color:0xffffff, size:0.15, transparent:true, opacity:0.6})));
+
+  // Globe base
+  const sphereGeo = new THREE.SphereGeometry(1, 64, 64);
+  const sphereMat = new THREE.MeshPhongMaterial({
+    color: 0x0a1628,
+    emissive: 0x061018,
+    specular: 0x1DB954,
+    shininess: 20,
+    transparent: true,
+    opacity: 0.95,
+  });
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  scene.add(sphere);
+
+  // Wireframe grid lines (lat/lon)
+  const wireGeo = new THREE.SphereGeometry(1.002, 24, 24);
+  const wireMat = new THREE.MeshBasicMaterial({color:0x1DB954, wireframe:true, transparent:true, opacity:0.06});
+  scene.add(new THREE.Mesh(wireGeo, wireMat));
+
+  // Atmosphere glow
+  const atmGeo = new THREE.SphereGeometry(1.08, 64, 64);
+  const atmMat = new THREE.MeshPhongMaterial({
+    color: 0x1DB954, transparent:true, opacity:0.07, side: THREE.BackSide
+  });
+  scene.add(new THREE.Mesh(atmGeo, atmMat));
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dirLight = new THREE.DirectionalLight(0x88ffaa, 1.2);
+  dirLight.position.set(3, 2, 3);
+  scene.add(dirLight);
+  const rimLight = new THREE.DirectionalLight(0x1DB954, 0.4);
+  rimLight.position.set(-3, -1, -2);
+  scene.add(rimLight);
+
+  // Country markers
+  const maxCount = sorted[0]?.[1]?.length || 1;
+  const markers = [];
+  countryMeshes = {};
+
+  sorted.forEach(([code, tracks], idx) => {
+    const coords = COUNTRY_COORDS[code];
+    if (!coords) return;
+    const [lat, lon] = coords;
+    const phi = (90 - lat) * Math.PI / 180;
+    const theta = (lon + 180) * Math.PI / 180;
+
+    const r = 1.01;
+    const x = -r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.cos(phi);
+    const z = r * Math.sin(phi) * Math.sin(theta);
+
+    // Get dominant color from first track's album
+    const trackColors = tracks.slice(0,1).map(t => t._dominantColor || null);
+    const baseColor = idx === 0 ? 0x1DB954 : idx < 3 ? 0x22c55e : idx < 6 ? 0x38bdf8 : 0xc084fc;
+
+    // Pulse ring
+    const ringSize = 0.04 + (tracks.length / maxCount) * 0.08;
+    const ringGeo = new THREE.CircleGeometry(ringSize, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: baseColor, transparent:true, opacity:0.85, side:THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.set(x, y, z);
+    ring.lookAt(new THREE.Vector3(x*2, y*2, z*2));
+    ring._countryCode = code;
+    ring._tracks = tracks;
+    scene.add(ring);
+    markers.push(ring);
+    countryMeshes[code] = ring;
+
+    // Glow point
+    const ptGeo = new THREE.SphereGeometry(0.012 + (tracks.length/maxCount)*0.015, 12, 12);
+    const ptMat = new THREE.MeshBasicMaterial({ color: baseColor });
+    const pt = new THREE.Mesh(ptGeo, ptMat);
+    pt.position.set(x, y, z);
+    pt._countryCode = code;
+    pt._tracks = tracks;
+    scene.add(pt);
+    markers.push(pt);
+  });
+
+  // Globe group for rotation
+  const globeGroup = new THREE.Group();
+  globeGroup.add(sphere);
+  scene.add(globeGroup);
+  sphere.parent.remove(sphere);
+  globeGroup.add(sphere);
+  // Add markers to group too
+  markers.forEach(m => { m.parent.remove(m); globeGroup.add(m); });
+  // Wireframe
+  const wm = scene.children.find(c => c.material?.wireframe);
+  if (wm) { wm.parent.remove(wm); globeGroup.add(wm); }
+  const atm = scene.children.find(c => c.material?.opacity === 0.07);
+  if (atm) { atm.parent.remove(atm); globeGroup.add(atm); }
+
+  globeGroup.rotation.y = globeRotY;
+  globeGroup.rotation.x = globeRotX;
+
+  // Raycaster for hover
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let animId;
+
+  const animate = () => {
+    animId = requestAnimationFrame(animate);
+    if (!isDragging) globeGroup.rotation.y += 0.002;
+    globeRotY = globeGroup.rotation.y;
+    // Pulse markers
+    const t = Date.now() * 0.002;
+    markers.forEach((m, i) => {
+      if (m.geometry.type === 'CircleGeometry') {
+        const pulse = 1 + Math.sin(t + i * 0.5) * 0.15;
+        m.scale.setScalar(pulse);
+      }
+    });
+    renderer.render(scene, camera);
+  };
+  animate();
+  globeAnimId = animId;
+
+  // Mouse events
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true;
+    prevMouse = { x: e.clientX, y: e.clientY };
+    canvas.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'grab'; });
+  window.addEventListener('mousemove', e => {
+    if (isDragging) {
+      const dx = e.clientX - prevMouse.x;
+      const dy = e.clientY - prevMouse.y;
+      globeGroup.rotation.y += dx * 0.008;
+      globeGroup.rotation.x += dy * 0.008;
+      globeGroup.rotation.x = Math.max(-Math.PI/3, Math.min(Math.PI/3, globeGroup.rotation.x));
+      prevMouse = { x: e.clientX, y: e.clientY };
+    }
+
+    // Hover detection
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(markers);
+    if (hits.length > 0) {
+      const code = hits[0].object._countryCode;
+      const tracks = hits[0].object._tracks;
+      if (code && code !== hoveredCountry) {
+        hoveredCountry = code;
+        showCountryCard(code, tracks);
+        document.getElementById('globe-tooltip').textContent = COUNTRY_NAMES[code]||code;
+      }
+      canvas.style.cursor = 'pointer';
+    } else {
+      canvas.style.cursor = isDragging ? 'grabbing' : 'grab';
+    }
+  });
+
+  // Touch support
+  canvas.addEventListener('touchstart', e => {
+    isDragging = true;
+    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, {passive:true});
+  canvas.addEventListener('touchend', () => { isDragging = false; }, {passive:true});
+  canvas.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const dx = e.touches[0].clientX - prevMouse.x;
+    const dy = e.touches[0].clientY - prevMouse.y;
+    globeGroup.rotation.y += dx * 0.008;
+    globeGroup.rotation.x += dy * 0.008;
+    globeGroup.rotation.x = Math.max(-Math.PI/3, Math.min(Math.PI/3, globeGroup.rotation.x));
+    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, {passive:true});
+}
+
+function showCountryCard(code, tracks) {
+  const flag = COUNTRY_FLAGS[code]||'🌐';
+  const name = COUNTRY_NAMES[code]||code;
+  const artists = [...new Set(tracks.map(t=>t.artists[0]?.name))].slice(0,3);
+  const topTrack = tracks[0];
+  const cover = topTrack?.album?.images?.[1]?.url||topTrack?.album?.images?.[0]?.url;
+  const listeners = topTrack ? (topTrack._listeners ? formatNum(topTrack._listeners) : formatNum(Math.round(1000*Math.exp((topTrack.popularity||0)*0.115)))) : '—';
+
+  document.getElementById('country-card').innerHTML = `
+    <div style="text-align:center;width:100%;">
+      <!-- Pokemon-style card -->
+      <div style="
+        background:linear-gradient(135deg,#1a2744 0%,#0d1117 50%,#1a2744 100%);
+        border:2px solid var(--green);
+        border-radius:16px;
+        padding:1.25rem;
+        position:relative;
+        overflow:hidden;
+        box-shadow:0 0 30px rgba(29,185,84,.3), inset 0 0 30px rgba(29,185,84,.05);
+      ">
+        <!-- Sheen effect -->
+        <div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent 40%,rgba(29,185,84,.05) 50%,transparent 60%);pointer-events:none;"></div>
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;">
+          <div style="font-size:2.5rem;line-height:1;">${flag}</div>
+          <div style="text-align:right;">
+            <div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);">ORIGEN</div>
+            <div style="font-size:1rem;font-weight:800;letter-spacing:-.02em;">${name}</div>
+          </div>
+        </div>
+        <!-- Cover art -->
+        ${cover ? `
+          <div style="border-radius:10px;overflow:hidden;margin-bottom:.875rem;border:1px solid rgba(29,185,84,.3);">
+            <img src="${cover}" style="width:100%;display:block;aspect-ratio:1;object-fit:cover;">
+          </div>` : `
+          <div style="height:120px;background:var(--green-dim);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:3rem;margin-bottom:.875rem;">🎵</div>`}
+        <!-- Track name -->
+        <div style="font-size:.95rem;font-weight:800;letter-spacing:-.02em;margin-bottom:.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(topTrack?.name||'—')}</div>
+        <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:.875rem;">${escHtml(topTrack?.artists?.[0]?.name||'—')}</div>
+        <!-- Stats row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.875rem;">
+          <div style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.2);border-radius:8px;padding:.4rem;text-align:center;">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Canciones</div>
+            <div style="font-size:.95rem;font-weight:800;color:var(--green);">${tracks.length}</div>
+          </div>
+          <div style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.2);border-radius:8px;padding:.4rem;text-align:center;">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Oyentes</div>
+            <div style="font-size:.85rem;font-weight:800;color:var(--green);">${listeners}</div>
+          </div>
+          <div style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.2);border-radius:8px;padding:.4rem;text-align:center;">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">BPM</div>
+            <div style="font-size:.95rem;font-weight:800;color:var(--green);">${topTrack?._audio?.bpm||'—'}</div>
+          </div>
+        </div>
+        <!-- Artists list -->
+        <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);border-top:1px solid var(--border);padding-top:.625rem;">
+          🎤 ${artists.map(a=>escHtml(a)).join(' · ')}
+          ${tracks.length > 3 ? `<span style="color:var(--green)"> +${tracks.length-3} más</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function highlightCountryByCode(code) {
+  if (!window._globeCountryTracks) return;
+  const tracks = window._globeCountryTracks[code];
+  if (tracks) { hoveredCountry = code; showCountryCard(code, tracks); }
 }
 
 // ===== SESSION IDEAL =====
