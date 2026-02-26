@@ -1547,7 +1547,23 @@ const COUNTRY_NAMES = {
   DE:'Alemania',SE:'Suecia',NO:'Noruega',NL:'Países Bajos',BE:'Bélgica',
   KR:'Corea del Sur',JP:'Japón',AU:'Australia',CU:'Cuba',BB:'Barbados',TT:'Trinidad',
   PE:'Perú','DO':'Rep. Dominicana',VE:'Venezuela',EC:'Ecuador',
+  JM:'Jamaica',IT:'Italia',PT:'Portugal',DK:'Dinamarca',FI:'Finlandia',IE:'Irlanda',
+  RU:'Rusia',PL:'Polonia',CZ:'República Checa',AT:'Austria',CH:'Suiza',
+  NG:'Nigeria',GH:'Ghana',ZA:'Sudáfrica',KE:'Kenia',
+  IN:'India',CN:'China',TW:'Taiwán',ID:'Indonesia',PH:'Filipinas',
+  BO:'Bolivia',PY:'Paraguay',UY:'Uruguay',GT:'Guatemala',HN:'Honduras',SV:'El Salvador',
+  CR:'Costa Rica',PA:'Panamá',NI:'Nicaragua',
 };
+
+// Extend COUNTRY_COORDS with more countries for globe markers
+Object.assign(COUNTRY_COORDS, {
+  JM:[18,-77],IT:[42,12],PT:[39,-8],DK:[56,10],FI:[64,26],IE:[53,-8],
+  RU:[60,100],PL:[52,20],CZ:[50,15],AT:[47,14],CH:[47,8],
+  NG:[9,8],GH:[8,-2],ZA:[-29,25],KE:[1,38],
+  IN:[20,77],CN:[35,105],TW:[24,121],ID:[-5,120],PH:[13,122],
+  BO:[-17,-65],PY:[-23,-58],UY:[-33,-56],GT:[15,-90],HN:[15,-87],
+  SV:[14,-89],CR:[10,-84],PA:[9,-80],NI:[13,-85],
+});
 
 // Country lat/lon centers for globe markers
 const COUNTRY_COORDS = {
@@ -1565,6 +1581,62 @@ let globeRotY = 0, globeRotX = 0.3;
 let countryMeshes = {}; // code -> mesh
 let hoveredCountry = null;
 
+// Cache MusicBrainz results to avoid re-fetching
+const _mbCache = {};
+
+async function lookupArtistCountryMB(artistName) {
+  if (_mbCache[artistName] !== undefined) return _mbCache[artistName];
+  try {
+    const q = encodeURIComponent(artistName);
+    const res = await fetch(
+      `https://musicbrainz.org/ws/2/artist/?query=artist:${q}&fmt=json&limit=3`,
+      { headers: { 'User-Agent': 'SpotifyDashboard/1.0 (github.com/fedlui)' } }
+    );
+    if (!res.ok) { _mbCache[artistName] = null; return null; }
+    const data = await res.json();
+    const artists = data.artists || [];
+    // Find best match: name similarity + has country
+    for (const a of artists) {
+      if (!a.country && !a.area?.name) continue;
+      const nameLower = a.name.toLowerCase();
+      const queryLower = artistName.toLowerCase();
+      if (nameLower === queryLower || nameLower.includes(queryLower) || queryLower.includes(nameLower)) {
+        const country = a.country || mbAreaToCode(a.area?.name || '');
+        _mbCache[artistName] = country || null;
+        return _mbCache[artistName];
+      }
+    }
+    // Fallback: take first result with country
+    const first = artists.find(a => a.country || a.area?.name);
+    if (first) {
+      const country = first.country || mbAreaToCode(first.area?.name || '');
+      _mbCache[artistName] = country || null;
+      return _mbCache[artistName];
+    }
+    _mbCache[artistName] = null;
+    return null;
+  } catch(e) { _mbCache[artistName] = null; return null; }
+}
+
+function mbAreaToCode(areaName) {
+  const map = {
+    'United States':'US','United Kingdom':'GB','Canada':'CA','Mexico':'MX',
+    'Puerto Rico':'PR','Colombia':'CO','Argentina':'AR','Brazil':'BR','Chile':'CL',
+    'Spain':'ES','France':'FR','Germany':'DE','Sweden':'SE','Norway':'NO',
+    'Netherlands':'NL','Belgium':'BE','South Korea':'KR','Japan':'JP','Australia':'AU',
+    'Cuba':'CU','Jamaica':'JM','Trinidad and Tobago':'TT','Venezuela':'VE',
+    'Peru':'PE','Dominican Republic':'DO','Ecuador':'EC','Bolivia':'BO',
+    'Italy':'IT','Portugal':'PT','Denmark':'DK','Finland':'FI','Ireland':'IE',
+    'Russia':'RU','Poland':'PL','Czech Republic':'CZ','Austria':'AT','Switzerland':'CH',
+    'Nigeria':'NG','Ghana':'GH','South Africa':'ZA','Kenya':'KE',
+    'India':'IN','China':'CN','Taiwan':'TW','Indonesia':'ID','Philippines':'PH',
+  };
+  return map[areaName] || null;
+}
+
+// Sleep helper for rate limiting
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 function renderMap() {
   if (document.getElementById('map-content').innerHTML.length > 50) return;
 
@@ -1572,7 +1644,7 @@ function renderMap() {
   const countryTracks = {};
   tracksData.forEach(t => {
     t.artists.forEach(a => {
-      const country = ARTIST_COUNTRIES[a.name];
+      const country = ARTIST_COUNTRIES[a.name] || _mbCache[a.name];
       if (country) {
         if (!countryTracks[country]) countryTracks[country] = [];
         if (!countryTracks[country].find(x=>x.id===t.id)) countryTracks[country].push(t);
@@ -1583,10 +1655,11 @@ function renderMap() {
   const sorted = Object.entries(countryTracks).sort((a,b)=>b[1].length-a[1].length);
 
   // Unknown artists grouped with their tracks
-  const unknownMap = {}; // artistName -> tracks
+  const unknownMap = {};
   tracksData.forEach(t => {
     t.artists.forEach(a => {
-      if (!ARTIST_COUNTRIES[a.name]) {
+      const known = ARTIST_COUNTRIES[a.name] || _mbCache[a.name];
+      if (!known) {
         if (!unknownMap[a.name]) unknownMap[a.name] = [];
         if (!unknownMap[a.name].find(x=>x.id===t.id)) unknownMap[a.name].push(t);
       }
@@ -1603,6 +1676,7 @@ function renderMap() {
     <div style="margin-bottom:1rem;">
       <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.25rem;">🌍 Globo de orígenes</h2>
       <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Arrastra el globo · Pasa el cursor sobre un punto para ver tus canciones</p>
+      <div id="mb-lookup-status" style="margin-top:.4rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--green);transition:opacity 1s;"></div>
     </div>
 
     <!-- Year range slider -->
@@ -1668,7 +1742,7 @@ function renderMap() {
       </button>
       <div id="unknown-list" style="display:none;margin-top:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
         ${unknownEntries.map(([artist, tracks])=>`
-          <div style="display:flex;align-items:center;gap:1rem;padding:.75rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.04);">
+          <div id="unknown-row-${escHtml(artist.replace(/[^a-zA-Z0-9]/g,'_'))}" style="display:flex;align-items:center;gap:1rem;padding:.75rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.04);transition:opacity .5s;">
             <div style="font-size:.85rem;font-weight:600;flex:1;">${escHtml(artist)}</div>
             <div style="font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${tracks.length} canción${tracks.length>1?'es':''}</div>
             <div style="display:flex;gap:.4rem;">
@@ -1689,6 +1763,66 @@ function renderMap() {
 
   initGlobe(countryTracks, sorted);
   updateYearFill();
+
+  // Lookup unknown artists in MusicBrainz in background
+  if (unknownEntries.length > 0) {
+    lookupUnknownArtistsMB(unknownEntries);
+  }
+}
+
+async function lookupUnknownArtistsMB(unknownEntries) {
+  const statusEl = document.getElementById('mb-lookup-status');
+  let found = 0;
+
+  // Process in batches of 3, with 350ms delay between each (MusicBrainz rate limit = 1/sec)
+  for (let i = 0; i < unknownEntries.length; i++) {
+    const [artistName, tracks] = unknownEntries[i];
+    if (i > 0 && i % 3 === 0) await sleep(1100); // rate limit
+    else if (i > 0) await sleep(350);
+
+    const country = await lookupArtistCountryMB(artistName);
+    if (!country) continue;
+
+    found++;
+    // Add to ARTIST_COUNTRIES so future runs use it
+    ARTIST_COUNTRIES[artistName] = country;
+
+    // Update countryTracks
+    if (!window._globeCountryTracks) continue;
+    if (!window._globeCountryTracks[country]) window._globeCountryTracks[country] = [];
+    tracks.forEach(t => {
+      if (!window._globeCountryTracks[country].find(x=>x.id===t.id))
+        window._globeCountryTracks[country].push(t);
+    });
+
+    // Update the globe markers
+    const sortedNew = Object.entries(window._globeCountryTracks).sort((a,b)=>b[1].length-a[1].length);
+    updateGlobeMarkers(window._globeCountryTracks);
+
+    // Update chips
+    const chips = document.getElementById('country-chips');
+    if (chips) {
+      chips.innerHTML = sortedNew.map(([code,trs])=>`
+        <div onclick="highlightCountryByCode('${code}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${trs.length}</span>
+        </div>`).join('');
+    }
+
+    // Update status
+    if (statusEl) statusEl.textContent = `🔍 Buscando países... ${i+1}/${unknownEntries.length} (${found} encontrados)`;
+
+    // Remove from unknown list if found
+    const row = document.getElementById(`unknown-row-${CSS.escape(artistName)}`);
+    if (row) row.style.opacity = '0.3';
+  }
+
+  if (statusEl) {
+    statusEl.textContent = found > 0
+      ? `✅ MusicBrainz: ${found} artistas nuevos identificados`
+      : `ℹ️ No se encontraron países adicionales`;
+    setTimeout(() => { if(statusEl) statusEl.style.opacity='0'; }, 4000);
+  }
 }
 
 function toggleUnknown() {
