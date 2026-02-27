@@ -1739,7 +1739,7 @@ function renderMap() {
     {key:'1980s',label:'80s',      range:[1980,1989], col:'#f87171'},
     {key:'pre80', label:'Antes 80',range:[0,1979],    col:'#fb923c'},
   ];
-  const trackYears = tracksData.map(t => parseInt(t.album?.release_date?.split('-')[0])||0);
+  const trackYears = tracksData.map(t=>{const y=parseInt(t.album?.release_date?.split('-')[0]);return(y&&y>1900)?y:null;}).filter(Boolean);
   // Only show epochs that have at least one track
   const activeEpochs = epochDefs.filter(e =>
     e.key === 'all' || trackYears.some(y => y >= e.range[0] && y <= e.range[1])
@@ -1885,7 +1885,7 @@ function filterByEpoch(epochKey) {
   Object.entries(base).forEach(([code, items]) => {
     const f = epochKey === 'all'
       ? items
-      : items.filter(i => i.year >= lo && i.year <= hi);
+      : items.filter(i => i.year && i.year > 1900 && i.year >= lo && i.year <= hi);
     if (f.length) {
       filtered[code] = f.map(i => tracksData.find(t=>t.id===i.id)).filter(Boolean);
     }
@@ -2090,7 +2090,7 @@ function buildGlobe(countryTracks, sorted) {
 
   function drawCountryBorders(geojson) {
     geojson.features.forEach(feature => {
-      const iso = feature.properties?.ISO_A2 || feature.properties?.iso_a2 || '';
+      const p = feature.properties||{}; const iso = (p.ISO_A2&&p.ISO_A2!=='-1'?p.ISO_A2:null)||(p.ISO_A2_EH&&p.ISO_A2_EH!=='-1'?p.ISO_A2_EH:null)||p.iso_a2||'';
       if (!iso || iso==='-1' || iso==='') return;
 
       const isActive = ACTIVE_CODES.has(iso);
@@ -2179,7 +2179,7 @@ function buildGlobe(countryTracks, sorted) {
     requestAnimationFrame(animate);
     const t=Date.now()*0.0018;
     _markerMeshes.forEach((m,i)=>{
-      if(m.isHalo){
+      if(m.isHalo && !m.hidden){
         m.mesh.scale.setScalar(1+Math.sin(t+i*0.85)*0.2);
         m.mesh.material.opacity=0.4+Math.sin(t+i*0.85)*0.15;
       }
@@ -2253,7 +2253,7 @@ function updateGlobeMarkers(filteredCountryTracks) {
     sortedF.forEach(([code]) => {
       if (knownBorders.has(code)) return;
       const feature = window._globeGeoJSON.features.find(f =>
-        (f.properties?.ISO_A2||f.properties?.iso_a2||'') === code
+        ((pp=>((pp.ISO_A2&&pp.ISO_A2!=='-1'?pp.ISO_A2:null)||(pp.ISO_A2_EH&&pp.ISO_A2_EH!=='-1'?pp.ISO_A2_EH:null)||pp.iso_a2||''))(f.properties||{})) === code
       );
       if (!feature) return;
       function ll2v3(lat,lon,r=1.003){
@@ -2314,11 +2314,11 @@ function updateGlobeMarkers(filteredCountryTracks) {
   _markerMeshes.forEach(m=>{
     const ft=filteredCountryTracks[m.code];
     if(!ft||!ft.length){
-      m.mesh.scale.setScalar(0.001); m.mesh.material.opacity=0;
+      m.hidden=true; m.mesh.visible=false;
     } else {
       const i=idxMap[m.code]??8;
+      m.hidden=false; m.mesh.visible=true; m.mesh.scale.setScalar(1);
       m.mesh.material.color?.setHex(COLORS[i%COLORS.length]);
-      m.mesh.scale.setScalar(1);
       if(!m.isHalo) m.mesh.material.opacity=1;
       m.mesh._tr=ft;
     }
