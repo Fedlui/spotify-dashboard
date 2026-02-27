@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spotify Pulse — Tus Canciones</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060810;
+    --surface: #0d1117;
+    --surface2: #131921;
+    --border: rgba(255,255,255,0.07);
+    --green: #1DB954;
+    --green-dim: rgba(29,185,84,0.15);
+    --green-glow: rgba(29,185,84,0.4);
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --accent: #c084fc;
+    --accent2: #38bdf8;
+    --red: #f87171;
+    --yellow: #fbbf24;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; min-height:100vh; overflow-x:hidden; }
+  body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(rgba(29,185,84,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(29,185,84,0.03) 1px,transparent 1px); background-size:60px 60px; pointer-events:none; z-index:0; }
+  body::after { content:''; position:fixed; top:-40%; left:-20%; width:60%; height:80%; background:radial-gradient(ellipse,rgba(29,185,84,0.06) 0%,transparent 70%); pointer-events:none; z-index:0; animation:drift 20s ease-in-out infinite alternate; }
+  @keyframes drift { from{transform:translate(0,0) scale(1)} to{transform:translate(10%,5%) scale(1.1)} }
+
+  header { position:relative; z-index:10; padding:1.5rem 3rem; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); backdrop-filter:blur(10px); }
+  .logo { display:flex; align-items:center; gap:.75rem; font-size:1.3rem; font-weight:800; letter-spacing:-.03em; }
+  .logo svg { color:var(--green); }
+  .logo-dot { display:inline-block; width:8px; height:8px; background:var(--green); border-radius:50%; animation:pulse-dot 2s ease-in-out infinite; margin-left:4px; }
+  @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 var(--green-glow)} 50%{box-shadow:0 0 0 8px transparent} }
+
+  /* AUTH */
+  #auth-screen { position:relative; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:calc(100vh - 80px); padding:2rem; text-align:center; }
+  .auth-card { background:var(--surface); border:1px solid var(--border); border-radius:24px; padding:3.5rem 4rem; max-width:520px; width:100%; position:relative; overflow:hidden; }
+  .auth-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,transparent,var(--green),transparent); animation:scan 3s linear infinite; }
+  @keyframes scan { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+  .auth-icon { width:80px; height:80px; background:var(--green-dim); border:1px solid var(--green-glow); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 2rem; color:var(--green); font-size:2rem; }
+  .auth-title { font-size:2rem; font-weight:800; letter-spacing:-.04em; margin-bottom:.75rem; background:linear-gradient(135deg,#fff 40%,var(--green)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .auth-desc { color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:.85rem; line-height:1.7; margin-bottom:2.5rem; }
+  .btn-spotify { display:inline-flex; align-items:center; gap:.75rem; background:var(--green); color:#000; font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; padding:1rem 2.5rem; border-radius:100px; border:none; cursor:pointer; transition:all .3s; text-decoration:none; letter-spacing:.02em; }
+  .btn-spotify:hover { background:#22e065; transform:translateY(-2px); box-shadow:0 12px 40px var(--green-glow); }
+  .auth-note { margin-top:1.5rem; font-size:.75rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+  /* SETUP */
+  #setup-screen { position:relative; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:calc(100vh - 80px); padding:2rem; }
+  .setup-card { background:var(--surface); border:1px solid var(--border); border-radius:24px; padding:3rem; max-width:600px; width:100%; }
+  .setup-title { font-size:1.5rem; font-weight:800; letter-spacing:-.03em; margin-bottom:.5rem; }
+  .setup-sub { color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:.8rem; margin-bottom:2rem; }
+  .form-group { margin-bottom:1.5rem; }
+  label { display:block; font-size:.8rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:.5rem; }
+  input,select { width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.9rem; padding:.875rem 1.25rem; border-radius:12px; outline:none; transition:border-color .2s; }
+  input:focus,select:focus { border-color:var(--green); }
+  select option { background:var(--surface2); }
+  .btn-primary { width:100%; background:var(--green); color:#000; font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; padding:1rem; border-radius:12px; border:none; cursor:pointer; transition:all .3s; margin-top:.5rem; }
+  .btn-primary:hover { background:#22e065; transform:translateY(-1px); }
+  .steps-hint { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin-bottom:2rem; }
+  .steps-hint h4 { font-size:.8rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--green); margin-bottom:.75rem; }
+  .steps-hint p { font-family:'JetBrains Mono',monospace; font-size:.75rem; color:var(--muted); line-height:1.8; }
+  .steps-hint a { color:var(--green); }
+
+  /* DASHBOARD */
+  #dashboard { position:relative; z-index:5; padding:2.5rem 3rem; max-width:1400px; margin:0 auto; }
+  .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2.5rem; flex-wrap:wrap; gap:1rem; }
+  .user-info { display:flex; align-items:center; gap:1rem; }
+  .user-avatar { width:52px; height:52px; border-radius:50%; border:2px solid var(--green); object-fit:cover; }
+  .user-avatar-placeholder { width:52px; height:52px; border-radius:50%; border:2px solid var(--green); background:var(--green-dim); display:flex; align-items:center; justify-content:center; color:var(--green); font-weight:800; font-size:1.2rem; }
+  .user-name { font-size:1.2rem; font-weight:700; }
+  .user-meta { font-size:.78rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .controls { display:flex; gap:.75rem; flex-wrap:wrap; }
+  .btn-outline { background:transparent; border:1px solid var(--border); color:var(--text); font-family:'Syne',sans-serif; font-size:.82rem; font-weight:600; padding:.5rem 1.25rem; border-radius:100px; cursor:pointer; transition:all .2s; letter-spacing:.03em; }
+  .btn-outline:hover { border-color:var(--green); color:var(--green); }
+  .btn-outline.active { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+
+  /* NAV TABS */
+  .nav-tabs { display:flex; gap:.5rem; margin-bottom:2rem; border-bottom:1px solid var(--border); padding-bottom:0; }
+  .nav-tab { background:transparent; border:none; border-bottom:2px solid transparent; color:var(--muted); font-family:'Syne',sans-serif; font-size:.9rem; font-weight:600; padding:.75rem 1.5rem; cursor:pointer; transition:all .2s; margin-bottom:-1px; }
+  .nav-tab:hover { color:var(--text); }
+  .nav-tab.active { color:var(--green); border-bottom-color:var(--green); }
+
+  /* STATS */
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin-bottom:2.5rem; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.25rem 1.5rem; position:relative; overflow:hidden; }
+  .stat-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background:var(--green); transform:scaleX(0); transition:transform .3s; transform-origin:left; }
+  .stat-card:hover::after { transform:scaleX(1); }
+  .stat-label { font-size:.72rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:.5rem; }
+  .stat-value { font-size:1.6rem; font-weight:800; letter-spacing:-.03em; color:var(--green); }
+  .stat-sub { font-size:.75rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.25rem; }
+
+  /* TRACKS */
+  .section-title { font-size:.78rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:1.25rem; }
+  .tracks-grid { display:grid; gap:.75rem; }
+  .track-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.25rem 1.5rem; display:grid; grid-template-columns:40px 60px 1fr auto; align-items:center; gap:1.25rem; cursor:pointer; transition:all .2s; position:relative; overflow:hidden; }
+  .track-card:hover { border-color:rgba(29,185,84,.3); background:var(--surface2); transform:translateX(4px); }
+  .track-card.expanded { border-color:var(--green); background:var(--surface2); }
+  .track-rank { font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:500; color:var(--muted); text-align:center; }
+  .track-rank.top3 { color:var(--green); font-weight:700; font-size:1.1rem; }
+  .track-cover { width:60px; height:60px; border-radius:10px; object-fit:cover; flex-shrink:0; }
+  .track-cover-placeholder { width:60px; height:60px; border-radius:10px; background:var(--green-dim); display:flex; align-items:center; justify-content:center; color:var(--green); font-size:1.5rem; flex-shrink:0; }
+  .track-info { min-width:0; }
+  .track-name { font-size:1rem; font-weight:700; letter-spacing:-.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .track-artist { font-size:.82rem; color:var(--muted); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:.2rem; }
+  .track-meta { text-align:right; flex-shrink:0; }
+  .pop-bar { display:flex; align-items:center; gap:.5rem; justify-content:flex-end; }
+  .pop-track { width:60px; height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .pop-fill { height:100%; background:var(--green); border-radius:2px; transition:width .8s ease; }
+  .pop-num { font-family:'JetBrains Mono',monospace; font-size:.75rem; color:var(--muted); min-width:28px; }
+
+  /* EXPANDED */
+  .track-details { display:none; grid-column:1/-1; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border); }
+  .track-card.expanded .track-details { display:block; }
+  .details-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.75rem; margin-bottom:1.25rem; }
+  .detail-chip { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:.625rem .875rem; }
+  .detail-chip-label { font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:.3rem; }
+  .detail-chip-value { font-family:'JetBrains Mono',monospace; font-size:.88rem; font-weight:500; color:var(--text); }
+  .features-section { margin-bottom:1.25rem; }
+  .features-title { font-size:.7rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:.75rem; }
+  .feature-row { display:flex; align-items:center; gap:.875rem; margin-bottom:.5rem; }
+  .feature-name { font-size:.75rem; font-family:'JetBrains Mono',monospace; color:var(--muted); min-width:100px; }
+  .feature-bar { flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .feature-fill { height:100%; border-radius:3px; transition:width .8s ease .1s; }
+  .feature-val { font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); min-width:35px; text-align:right; }
+  .lyrics-section { margin-top:1rem; }
+  .lyrics-title { font-size:.7rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:.75rem; }
+  .lyrics-content { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; font-family:'JetBrains Mono',monospace; font-size:.8rem; line-height:1.9; color:var(--muted); max-height:200px; overflow-y:auto; white-space:pre-wrap; }
+  .lyrics-content::-webkit-scrollbar { width:4px; }
+  .lyrics-content::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .btn-fetch-lyrics { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:.8rem; padding:.5rem 1rem; border-radius:8px; cursor:pointer; transition:all .2s; }
+  .btn-fetch-lyrics:hover { border-color:var(--accent); color:var(--accent); }
+  .genre-badge { display:inline-block; background:rgba(192,132,252,.15); border:1px solid rgba(192,132,252,.3); color:var(--accent); font-size:.7rem; font-family:'JetBrains Mono',monospace; padding:.2rem .6rem; border-radius:100px; margin:.2rem; }
+
+  /* WRAPPED */
+  #wrapped-section { display:none; }
+  #wrapped-section.visible { display:block; }
+  .wrapped-hero { text-align:center; padding:3rem 1rem 2rem; }
+  .wrapped-year { font-size:5rem; font-weight:800; letter-spacing:-.05em; background:linear-gradient(135deg,var(--green),var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
+  .wrapped-subtitle { font-size:1rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.5rem; }
+  .wrapped-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-bottom:2rem; align-items:start; }
+  .wrapped-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:2rem;
+    position:relative; overflow:visible;
+    transform:scale(1); transition:transform .3s ease, box-shadow .3s ease, border-color .3s ease, background .3s ease;
+    cursor:default;
+  }
+  .wrapped-card::after { content:''; position:absolute; inset:0; border-radius:20px; pointer-events:none; }
+  .wrapped-card:hover {
+    transform:scale(1.03);
+    box-shadow:0 16px 48px rgba(0,0,0,.4);
+    border-color:rgba(255,255,255,.15);
+    background:var(--surface2);
+    z-index:2;
+  }
+  .wrapped-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:20px 20px 0 0; }
+  .wrapped-card.green::before { background:linear-gradient(90deg,var(--green),transparent); }
+  .wrapped-card.green:hover { border-color:rgba(29,185,84,.4); box-shadow:0 16px 48px rgba(29,185,84,.15); }
+  .wrapped-card.purple::before { background:linear-gradient(90deg,var(--accent),transparent); }
+  .wrapped-card.purple:hover { border-color:rgba(192,132,252,.4); box-shadow:0 16px 48px rgba(192,132,252,.15); }
+  .wrapped-card.blue::before { background:linear-gradient(90deg,var(--accent2),transparent); }
+  .wrapped-card.blue:hover { border-color:rgba(56,189,248,.4); box-shadow:0 16px 48px rgba(56,189,248,.15); }
+  .wrapped-card.yellow::before { background:linear-gradient(90deg,var(--yellow),transparent); }
+  .wrapped-card.yellow:hover { border-color:rgba(251,191,36,.4); box-shadow:0 16px 48px rgba(251,191,36,.15); }
+  .wrapped-card-icon { font-size:2.5rem; margin-bottom:1rem; }
+  .wrapped-card-label { font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:.5rem; }
+  .wrapped-card-value { font-size:1.8rem; font-weight:800; letter-spacing:-.03em; margin-bottom:.25rem; }
+  .wrapped-card-sub { font-size:.82rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .wrapped-top-list { list-style:none; }
+  .wrapped-top-list li { display:flex; align-items:center; gap:1rem; padding:.625rem 0; border-bottom:1px solid var(--border); }
+  .wrapped-top-list li:last-child { border-bottom:none; }
+  .wrapped-num { font-family:'JetBrains Mono',monospace; font-size:.8rem; color:var(--muted); min-width:20px; }
+  .wrapped-thumb { width:40px; height:40px; border-radius:8px; object-fit:cover; }
+  .wrapped-thumb-placeholder { width:40px; height:40px; border-radius:8px; background:var(--green-dim); display:flex; align-items:center; justify-content:center; color:var(--green); }
+  .wrapped-item-info { flex:1; min-width:0; }
+  .wrapped-item-name { font-size:.88rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .wrapped-item-sub { font-size:.75rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .genre-chart { margin-top:1rem; }
+  .genre-row { display:flex; align-items:center; gap:.75rem; margin-bottom:.625rem; }
+  .genre-label { font-size:.78rem; font-family:'JetBrains Mono',monospace; color:var(--text); min-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .genre-bar-wrap { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .genre-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,var(--green),var(--accent)); transition:width 1s ease; }
+  .genre-pct { font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); min-width:35px; text-align:right; }
+  .decade-chart { display:flex; gap:.75rem; align-items:flex-end; height:120px; margin-top:1.25rem; padding:0 .25rem; }
+  .decade-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:.4rem; }
+  .decade-bar-wrap { width:100%; display:flex; align-items:flex-end; height:80px; }
+  .decade-bar { width:100%; background:linear-gradient(180deg,var(--green),rgba(29,185,84,.3)); border-radius:6px 6px 0 0; transition:height .8s ease; position:relative; min-height:8px; }
+  .decade-bar:hover { background:linear-gradient(180deg,#22e065,rgba(34,224,101,.4)); }
+  .decade-cnt { font-size:.7rem; font-family:'JetBrains Mono',monospace; color:var(--green); font-weight:600; }
+  .decade-label { font-size:.65rem; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+
+  /* LOADING */
+  .loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:5rem; gap:1.5rem; }
+  .spinner { width:48px; height:48px; border:3px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { font-family:'JetBrains Mono',monospace; font-size:.85rem; color:var(--muted); animation:blink 1.5s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* MISC */
+  .error-box { background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.3); border-radius:12px; padding:1.25rem; font-family:'JetBrains Mono',monospace; font-size:.82rem; color:var(--red); margin:1rem 0; }
+  /* RECOMMENDATIONS */
+  .rec-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; }
+  .rec-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.25rem; display:flex; flex-direction:column; gap:.75rem; transition:all .2s; }
+  .rec-card:hover { border-color:rgba(29,185,84,.3); transform:translateY(-2px); }
+  .rec-header { display:flex; align-items:center; gap:.875rem; }
+  .rec-cover { width:56px; height:56px; border-radius:10px; object-fit:cover; flex-shrink:0; }
+  .rec-cover-ph { width:56px; height:56px; border-radius:10px; background:var(--green-dim); display:flex; align-items:center; justify-content:center; color:var(--green); font-size:1.4rem; flex-shrink:0; }
+  .rec-info { flex:1; min-width:0; }
+  .rec-name { font-size:.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rec-artist { font-size:.78rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.15rem; }
+  .rec-reason { font-size:.75rem; color:var(--accent); font-family:'JetBrains Mono',monospace; background:rgba(192,132,252,.1); border:1px solid rgba(192,132,252,.2); border-radius:8px; padding:.4rem .75rem; }
+  .rec-pop { display:flex; align-items:center; gap:.5rem; }
+  .rec-pop-label { font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .rec-section-title { font-size:.78rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:1rem; margin-top:1.5rem; }
+  .rec-section-title:first-child { margin-top:0; }
+  /* FILTERS */
+  .filter-bar { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; margin-bottom:1.5rem; padding:1rem 1.25rem; background:var(--surface); border:1px solid var(--border); border-radius:16px; }
+  .filter-label { font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .filter-chip { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-family:'Syne',sans-serif; font-size:.78rem; font-weight:600; padding:.4rem 1rem; border-radius:100px; cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .filter-chip:hover { border-color:var(--green); color:var(--text); }
+  .filter-chip.active { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .filter-divider { width:1px; height:20px; background:var(--border); flex-shrink:0; }
+  .filter-order { background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.78rem; padding:.4rem .75rem; border-radius:100px; cursor:pointer; outline:none; }
+  .filter-search { background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.82rem; padding:.4rem 1rem; border-radius:100px; outline:none; flex:1; min-width:140px; max-width:220px; transition:border-color .2s; }
+  .filter-search:focus { border-color:var(--green); }
+  .filter-search::placeholder { color:var(--muted); }
+  .tracks-count { font-size:.75rem; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-bottom:.75rem; }
+
+  /* HIDDEN GEMS */
+  .gems-hero { text-align:center; padding:2rem 1rem 1.5rem; }
+  .gems-title { font-size:2rem; font-weight:800; letter-spacing:-.04em; background:linear-gradient(135deg,var(--yellow),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .gems-sub { font-size:.85rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.5rem; }
+  .gems-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
+  .gem-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.25rem; display:flex; flex-direction:column; gap:.75rem; transition:all .2s; position:relative; overflow:hidden; }
+  .gem-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--yellow),var(--accent),transparent); }
+  .gem-card:hover { transform:translateY(-3px); box-shadow:0 12px 40px rgba(251,191,36,.15); border-color:rgba(251,191,36,.3); }
+  .gem-header { display:flex; align-items:center; gap:.875rem; }
+  .gem-cover { width:56px; height:56px; border-radius:10px; object-fit:cover; flex-shrink:0; }
+  .gem-cover-ph { width:56px; height:56px; border-radius:10px; background:rgba(251,191,36,.1); display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex-shrink:0; }
+  .gem-info { flex:1; min-width:0; }
+  .gem-name { font-size:.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gem-artist { font-size:.78rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:.15rem; }
+  .gem-why { font-size:.75rem; color:var(--yellow); font-family:'JetBrains Mono',monospace; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.2); border-radius:8px; padding:.4rem .75rem; }
+  .gem-stats { display:flex; gap:.75rem; flex-wrap:wrap; }
+  .gem-stat { font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); background:var(--surface2); padding:.25rem .6rem; border-radius:6px; }
+
+  /* EVOLUTION */
+  .evo-table { width:100%; border-collapse:collapse; }
+  .evo-table th { font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:.75rem 1rem; text-align:left; border-bottom:1px solid var(--border); }
+  .evo-table td { padding:.75rem 1rem; border-bottom:1px solid rgba(255,255,255,.04); font-size:.85rem; vertical-align:middle; }
+  .evo-table tr:hover td { background:var(--surface2); }
+  .evo-badge { font-size:.7rem; font-family:'JetBrains Mono',monospace; padding:.2rem .6rem; border-radius:100px; }
+  .evo-up { background:rgba(29,185,84,.15); color:var(--green); }
+  .evo-down { background:rgba(248,113,113,.15); color:var(--red); }
+  .evo-new { background:rgba(56,189,248,.15); color:var(--accent2); }
+  .evo-same { background:rgba(107,114,128,.15); color:var(--muted); }
+  .evo-gone { background:rgba(251,191,36,.1); color:var(--yellow); }
+  .evo-rank-dots { display:flex; gap:3px; align-items:center; }
+  .evo-dot { width:8px; height:8px; border-radius:50%; }
+
+  /* MAP */
+  .map-wrap { position:relative; max-width:900px; margin:0 auto; }
+  .map-svg { width:100%; height:auto; }
+  .country-bar-list { display:grid; gap:.5rem; margin-top:1.5rem; }
+  .country-row { display:flex; align-items:center; gap:1rem; }
+  .country-flag { font-size:1.4rem; min-width:32px; }
+  .country-name { font-size:.85rem; font-weight:600; min-width:140px; }
+  .country-artists { font-size:.75rem; font-family:'JetBrains Mono',monospace; color:var(--muted); flex:1; }
+  .country-bar-wrap { width:120px; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .country-bar-fill { height:100%; background:linear-gradient(90deg,var(--green),var(--accent2)); border-radius:3px; }
+
+  /* SESSION */
+  .session-modes { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1.5rem; }
+  .session-mode-btn { background:var(--surface); border:1px solid var(--border); color:var(--muted); font-family:'Syne',sans-serif; font-size:.82rem; font-weight:600; padding:.6rem 1.25rem; border-radius:100px; cursor:pointer; transition:all .2s; }
+  .session-mode-btn:hover { border-color:var(--green); color:var(--text); }
+  .session-mode-btn.active { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .session-list { display:grid; gap:.5rem; }
+  .session-track { display:flex; align-items:center; gap:1rem; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:.875rem 1.25rem; }
+  .session-num { font-family:'JetBrains Mono',monospace; font-size:.85rem; color:var(--muted); min-width:24px; }
+  .session-cover { width:44px; height:44px; border-radius:8px; object-fit:cover; flex-shrink:0; }
+  .session-cover-ph { width:44px; height:44px; border-radius:8px; background:var(--green-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .session-info { flex:1; min-width:0; }
+  .session-name { font-size:.88rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .session-sub { font-size:.75rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .session-bpm { font-family:'JetBrains Mono',monospace; font-size:.82rem; color:var(--green); min-width:60px; text-align:right; }
+
+  /* PALETTE */
+  .palette-hero { display:flex; gap:.5rem; height:120px; border-radius:16px; overflow:hidden; margin-bottom:1.5rem; }
+  .palette-swatch { flex:1; transition:flex .3s ease; cursor:pointer; position:relative; }
+  .palette-swatch:hover { flex:3; }
+  .palette-swatch-label { position:absolute; bottom:.5rem; left:50%; transform:translateX(-50%); font-size:.65rem; font-family:'JetBrains Mono',monospace; color:rgba(255,255,255,.7); white-space:nowrap; opacity:0; transition:opacity .2s; }
+  .palette-swatch:hover .palette-swatch-label { opacity:1; }
+  .palette-albums { display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:.75rem; margin-top:1.5rem; }
+  .palette-album { border-radius:10px; overflow:hidden; position:relative; cursor:pointer; }
+  .palette-album img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+  .palette-album-color { position:absolute; bottom:0; left:0; right:0; height:4px; }
+
+  /* TIMELINE */
+  .timeline-decade { margin-bottom:2rem; }
+  .timeline-decade-header { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; padding:.75rem 1.25rem; background:var(--surface); border-radius:12px; border-left:3px solid var(--green); }
+  .timeline-decade-year { font-size:1.5rem; font-weight:800; letter-spacing:-.04em; color:var(--green); }
+  .timeline-decade-stats { font-size:.78rem; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+  .timeline-tracks { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:.75rem; }
+  .timeline-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1rem; display:flex; gap:.75rem; align-items:center; transition:all .2s; }
+  .timeline-card:hover { border-color:var(--green); transform:translateY(-2px); }
+  .timeline-cover { width:48px; height:48px; border-radius:8px; object-fit:cover; flex-shrink:0; }
+  .timeline-cover-ph { width:48px; height:48px; border-radius:8px; background:var(--green-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .timeline-name { font-size:.82rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .timeline-artist { font-size:.72rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+  /* RECORDS */
+  .records-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1.25rem; }
+  .record-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:1.5rem; position:relative; overflow:hidden; transition:all .2s; }
+  .record-card:hover { transform:translateY(-3px); border-color:rgba(29,185,84,.3); }
+  .record-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--green),var(--accent),transparent); }
+  .record-icon { font-size:2rem; margin-bottom:.75rem; }
+  .record-label { font-size:.7rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:.5rem; }
+  .record-value { font-size:1.1rem; font-weight:800; color:var(--green); margin-bottom:.25rem; letter-spacing:-.02em; }
+  .record-sub { font-size:.78rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .record-cover { width:40px; height:40px; border-radius:8px; object-fit:cover; margin-top:.75rem; }
+
+  .hidden { display:none !important; }
+  .toast { position:fixed; bottom:2rem; right:2rem; background:var(--surface); border:1px solid var(--green); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.82rem; padding:.875rem 1.5rem; border-radius:12px; z-index:1000; opacity:0; transform:translateY(20px); transition:all .3s; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .btn-export { background:rgba(56,189,248,.1); border:1px solid rgba(56,189,248,.3); color:var(--accent2); font-family:'Syne',sans-serif; font-size:.82rem; font-weight:600; padding:.5rem 1.25rem; border-radius:100px; cursor:pointer; transition:all .2s; }
+  .btn-export:hover { background:rgba(56,189,248,.2); }
+  @media(max-width:768px) { header{padding:1.25rem 1.5rem} #dashboard{padding:1.5rem} .track-card{grid-template-columns:30px 48px 1fr} .track-meta{display:none} .auth-card{padding:2rem 1.5rem} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/>
+    </svg>
+    Spotify Pulse<span class="logo-dot"></span>
+  </div>
+  <div id="header-actions"></div>
+</header>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-icon">🎵</div>
+    <h1 class="auth-title">Analiza tu música</h1>
+    <p class="auth-desc">Conecta tu cuenta de Spotify para ver análisis detallados<br>de tus canciones más escuchadas.</p>
+    <button class="btn-spotify" onclick="startAuth()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg>
+      Conectar con Spotify
+    </button>
+    <p class="auth-note">Inicia sesión con tu cuenta de Spotify</p>
+  </div>
+</div>
+
+<!-- SETUP -->
+<div id="setup-screen" class="hidden">
+  <div class="setup-card">
+    <h2 class="setup-title">Configuración</h2>
+    <p class="setup-sub">Credenciales de Spotify Developer</p>
+    <div class="steps-hint">
+      <h4>📋 Cómo obtener tu Client ID</h4>
+      <p>1. Ve a <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com/dashboard</a><br>
+      2. Crea una nueva App<br>
+      3. Agrega como Redirect URI: <strong id="redirect-display"></strong><br>
+      4. Copia tu Client ID</p>
+    </div>
+    <div class="form-group">
+      <label>Client ID de Spotify</label>
+      <input type="text" id="client-id-input" placeholder="Pega aquí tu Client ID..." />
+    </div>
+    <div id="setup-error" class="error-box hidden"></div>
+    <button class="btn-primary" onclick="doAuth()">Conectar con Spotify →</button>
+    <button class="btn-outline" style="width:100%;margin-top:.75rem;" onclick="showAuth()">← Volver</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p class="loading-text">Cargando tus canciones...</p>
+  </div>
+  <div id="content" class="hidden">
+    <div class="dash-header">
+      <div class="user-info">
+        <div id="user-avatar-wrap"></div>
+        <div>
+          <div class="user-name" id="user-display-name">—</div>
+          <div class="user-meta" id="user-meta">—</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="btn-outline active" onclick="setRange('short_term',this)">1 mes</button>
+        <button class="btn-outline" onclick="setRange('medium_term',this)">6 meses</button>
+        <button class="btn-outline" onclick="setRange('long_term',this)">Todo</button>
+        <button class="btn-export" onclick="exportData()">⬇ Exportar JSON</button>
+        <button class="btn-outline" onclick="logout()" style="color:var(--red);border-color:rgba(248,113,113,.3);">Salir</button>
+      </div>
+    </div>
+
+    <!-- NAV TABS -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showTab('tracks',this)">🎵 Mis Canciones</button>
+      <button class="nav-tab" onclick="showTab('wrapped',this)">🎁 Mi Wrapped</button>
+      <button class="nav-tab" onclick="showTab('recs',this)">🔭 Descubre</button>
+      <button class="nav-tab" onclick="showTab('gems',this)">💎 Gemas</button>
+      <button class="nav-tab" onclick="showTab('evolution',this)">📊 Evolución</button>
+      <button class="nav-tab" onclick="showTab('map',this)">🌍 Mapa</button>
+      <button class="nav-tab" onclick="showTab('session',this)">🕐 Sesión</button>
+      <button class="nav-tab" onclick="showTab('palette',this)">🎨 Paleta</button>
+      <button class="nav-tab" onclick="showTab('timeline',this)">📅 Décadas</button>
+      <button class="nav-tab" onclick="showTab('records',this)">🏆 Récords</button>
+    </div>
+
+    <!-- TRACKS TAB -->
+    <div id="tracks-tab">
+      <div class="stats-row" id="stats-row"></div>
+
+      <!-- FILTER BAR -->
+      <div class="filter-bar">
+        <span class="filter-label">Ordenar:</span>
+        <button class="filter-chip active" onclick="applyFilter('rank',this)">🏆 Mi Top</button>
+        <button class="filter-chip" onclick="applyFilter('popularity',this)">👥 Oyentes</button>
+        <button class="filter-chip" onclick="applyFilter('year',this)">📅 Año</button>
+        <button class="filter-chip" onclick="applyFilter('duration',this)">⏱ Duración</button>
+        <button class="filter-chip" onclick="applyFilter('bpm',this)">🥁 BPM</button>
+        <button class="filter-chip" onclick="applyFilter('name',this)">🔤 A-Z</button>
+        <div class="filter-divider"></div>
+        <select class="filter-order" id="filter-order" onchange="applyCurrentFilter()">
+          <option value="desc">↓ Mayor a menor</option>
+          <option value="asc">↑ Menor a mayor</option>
+        </select>
+        <div class="filter-divider"></div>
+        <input class="filter-search" id="filter-search" placeholder="🔍 Buscar canción..." oninput="applyCurrentFilter()">
+      </div>
+
+      <div class="tracks-count" id="tracks-count"></div>
+      <p class="section-title">Top Canciones — <span id="range-label">Último mes</span></p>
+      <div class="tracks-grid" id="tracks-grid"></div>
+    </div>
+
+    <!-- GEMS TAB -->
+    <div id="gems-tab" class="hidden">
+      <div class="gems-hero">
+        <div class="gems-title">💎 Tus Gemas Escondidas</div>
+        <div class="gems-sub">Canciones únicas que pocas personas conocen — tu gusto musical secreto</div>
+      </div>
+      <div id="gems-grid" class="gems-grid"></div>
+    </div>
+
+    <!-- RECS TAB -->
+    <div id="recs-tab" class="hidden">
+      <div id="recs-loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p class="loading-text">Buscando canciones para ti...</p>
+      </div>
+      <div id="recs-content"></div>
+    </div>
+
+    <!-- WRAPPED TAB -->
+    <div id="wrapped-tab" class="hidden">
+      <div class="wrapped-hero">
+        <div class="wrapped-year" id="wrapped-year">2025</div>
+        <div class="wrapped-subtitle">Tu resumen musical personal</div>
+      </div>
+      <div class="wrapped-grid" id="wrapped-grid"></div>
+    </div>
+
+    <!-- EXTRA TABS — dentro del #content -->
+    <div id="evolution-tab" class="hidden">
+      <div id="evolution-content"></div>
+    </div>
+    <div id="map-tab" class="hidden">
+      <div id="map-content"></div>
+    </div>
+    <div id="session-tab" class="hidden">
+      <div id="session-content"></div>
+    </div>
+    <div id="palette-tab" class="hidden">
+      <div id="palette-content"></div>
+    </div>
+    <div id="timeline-tab" class="hidden">
+      <div id="timeline-content"></div>
+    </div>
+    <div id="records-tab" class="hidden">
+      <div id="records-content"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<footer style="position:relative;z-index:5;text-align:center;padding:1.5rem;border-top:1px solid rgba(255,255,255,0.07);margin-top:2rem;">
+  <p style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:#6b7280;">
+    BPM data by <a href="https://getsongbpm.com" target="_blank" rel="dofollow" style="color:var(--green)">GetSongBPM</a>
+    &nbsp;·&nbsp; Genres by <a href="https://last.fm" target="_blank" style="color:var(--green)">Last.fm</a>
+    &nbsp;·&nbsp; Music by <a href="https://spotify.com" target="_blank" style="color:var(--green)">Spotify</a>
+  </p>
+</footer>
+
+<script>
+// ===== CONFIG =====
+const CLIENT_ID = 'f1d1a7deb2f04f038787128a2fd4516a';
+const LASTFM_KEY = '6c708f592f3f69bcfb89c9a119c07fbb';
+const REDIRECT_URI = window.location.href.split('?')[0].split('#')[0];
+const SCOPES = 'user-top-read user-read-private user-read-email';
+
+let accessToken = null;
+let tracksData = [];
+let audioFeaturesData = {};
+let currentRange = 'short_term';
+
+// ===== LISTENERS ESTIMATOR =====
+// Spotify popularity 0-100 → estimated real listeners (monthly approx)
+function estimateListeners(pop) {
+  // pop puede venir como string, number, null o undefined
+  const p = parseInt(pop);
+  if (isNaN(p)) return null;
+  // Escala exponencial: pop 100 ~ 80M, pop 50 ~ 1.2M, pop 20 ~ 18K, pop 0 ~ 1K
+  return Math.round(1000 * Math.exp(p * 0.115));
+}
+
+function formatNum(n) {
+  if (!n || isNaN(n)) return '—';
+  if (n >= 1000000000) return (n/1000000000).toFixed(1) + 'B';
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return Math.round(n/1000) + 'K';
+  return n.toString();
+}
+
+function formatListeners(pop, track) {
+  // Primero usa oyentes reales de Last.fm si están disponibles
+  if (track && track._listeners) return formatNum(track._listeners);
+  // Si no, estima desde el índice de Spotify
+  if (pop === undefined || pop === null) return '—';
+  const p = Number(pop);
+  if (isNaN(p)) return '—';
+  return formatNum(Math.round(1000 * Math.exp(p * 0.115))) + ' ~est';
+}
+
+// ===== PKCE =====
+function generateRandom(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => chars[b % chars.length]).join('');
+}
+async function generateCodeChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+// ===== INIT =====
+window.onload = async function() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (params.get('error')) { showAuth(); return; }
+  if (code) {
+    history.replaceState(null,'',window.location.pathname);
+    await exchangeCode(code);
+    return;
+  }
+  const stored = sessionStorage.getItem('sp_token');
+  const expiry = sessionStorage.getItem('sp_expiry');
+  if (stored && expiry && Date.now() < parseInt(expiry)) {
+    accessToken = stored;
+    showDashboard();
+    return;
+  }
+  showAuth();
+};
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  if (!verifier) { showAuth(); return; }
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({ grant_type:'authorization_code', code, redirect_uri:REDIRECT_URI, client_id:CLIENT_ID, code_verifier:verifier })
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      accessToken = data.access_token;
+      sessionStorage.setItem('sp_token', accessToken);
+      sessionStorage.setItem('sp_expiry', Date.now() + data.expires_in * 1000);
+      sessionStorage.removeItem('pkce_verifier');
+      showDashboard();
+    } else {
+      showAuth();
+      alert('Error al obtener token: ' + (data.error_description || data.error));
+    }
+  } catch(e) { showAuth(); alert('Error: ' + e.message); }
+}
+
+// ===== SCREENS =====
+function showAuth() {
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+}
+
+async function startAuth() {
+  if (!CLIENT_ID || CLIENT_ID === 'TU_CLIENT_ID_AQUI') { alert('⚠ Client ID no configurado.'); return; }
+  const verifier = generateRandom(64);
+  const challenge = await generateCodeChallenge(verifier);
+  sessionStorage.setItem('pkce_verifier', verifier);
+  const authUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
+    client_id:CLIENT_ID, response_type:'code', redirect_uri:REDIRECT_URI,
+    scope:SCOPES, state:generateRandom(16), code_challenge_method:'S256',
+    code_challenge:challenge, show_dialog:'true'
+  });
+  window.location.href = authUrl;
+}
+
+function showDashboard() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('content').classList.add('hidden');
+  const tr = sessionStorage.getItem('sp_range') || 'short_term';
+  currentRange = tr;
+  updateRangeButtons(tr);
+  loadData();
+}
+
+function logout() { sessionStorage.clear(); accessToken=null; tracksData=[]; showAuth(); }
+
+function doAuth() {
+  const cid = document.getElementById('client-id-input').value.trim();
+  if (!cid) { document.getElementById('setup-error').textContent='Ingresa tu Client ID'; document.getElementById('setup-error').classList.remove('hidden'); return; }
+  localStorage.setItem('sp_client_id', cid);
+  startAuth();
+}
+
+// ===== TABS =====
+const ALL_TABS = ['tracks','wrapped','recs','gems','evolution','map','session','palette','timeline','records'];
+function showTab(tab, btn) {
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ALL_TABS.forEach(t => {
+    const el = document.getElementById(t+'-tab');
+    if (el) el.classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'wrapped') renderWrapped();
+  if (tab === 'recs') loadRecommendations();
+  if (tab === 'gems') renderGems();
+  if (tab === 'evolution') renderEvolution();
+  if (tab === 'map') renderMap();
+  if (tab === 'session') renderSession();
+  if (tab === 'palette') renderPalette();
+  if (tab === 'timeline') renderTimeline();
+  if (tab === 'records') renderRecords();
+}
+
+// ===== LOAD DATA =====
+async function loadData() {
+  try {
+    const profile = await spotifyFetch('/me');
+    renderUser(profile);
+
+    const allTracks = [];
+    const offsets = [0,50,100,150];
+    for (const offset of offsets) {
+      document.querySelector('.loading-text').textContent = `Cargando canciones... ${allTracks.length}/200`;
+      const res = await spotifyFetch(`/me/top/tracks?time_range=${currentRange}&limit=50&offset=${offset}`);
+      allTracks.push(...(res.items||[]));
+    }
+    const seen = new Set();
+    tracksData = allTracks.filter(t => seen.has(t.id) ? false : seen.add(t.id));
+
+    // /me/top/tracks a veces no incluye popularity — obtenerla con /tracks?ids=
+    document.querySelector('.loading-text').textContent = 'Obteniendo oyentes...';
+    const missingPop = tracksData.filter(t => t.popularity === undefined || t.popularity === null);
+    if (missingPop.length > 0) {
+      // Fetch in chunks of 50
+      for (let i = 0; i < missingPop.length; i += 50) {
+        const chunk = missingPop.slice(i, i + 50);
+        const ids = chunk.map(t => t.id).join(',');
+        try {
+          const res = await spotifyFetch(`/tracks?ids=${ids}`);
+          (res.tracks || []).forEach(ft => {
+            if (!ft) return;
+            const orig = tracksData.find(t => t.id === ft.id);
+            if (orig && ft.popularity !== undefined) orig.popularity = ft.popularity;
+          });
+        } catch(e) { /* si falla, continuar */ }
+      }
+    }
+    // Fallback final solo para los que siguen sin dato
+    tracksData.forEach(t => { if (t.popularity === undefined || t.popularity === null) t.popularity = null; });
+
+    document.querySelector('.loading-text').textContent = 'Obteniendo géneros y BPM...';
+    await fetchEnrichedData();
+
+    renderStats();
+    renderTracks();
+    document.getElementById('tracks-count').textContent = `${tracksData.length} canciones cargadas`;
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('content').classList.remove('hidden');
+  } catch(e) {
+    console.error(e);
+    document.getElementById('loading').innerHTML = `
+      <div class="error-box"><strong>Error:</strong><br>${e.message}</div>
+      <button class="btn-outline" onclick="logout()" style="margin-top:1rem">← Volver</button>`;
+  }
+}
+
+// ===== LAST.FM + BPM ENRICHMENT =====
+async function fetchEnrichedData() {
+  tracksData.forEach(t => { t._genres=[]; t._audio={}; });
+  const chunks = [];
+  for (let i=0; i<tracksData.length; i+=5) chunks.push(tracksData.slice(i,i+5));
+
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async (track) => {
+      try {
+        const artist = encodeURIComponent(track.artists[0]?.name||'');
+        const song = encodeURIComponent(track.name);
+
+        // Last.fm: géneros + oyentes reales
+        const lfm = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_KEY}&artist=${artist}&track=${song}&format=json`);
+        if (lfm.ok) {
+          const d = await lfm.json();
+          const tags = d?.track?.toptags?.tag || [];
+          track._genres = tags.slice(0,4).map(t=>t.name).filter(t=>t.toLowerCase()!=='seen live'&&t.length>1);
+          // Oyentes y reproducciones reales de Last.fm
+          const listeners = parseInt(d?.track?.listeners || 0);
+          const playcount = parseInt(d?.track?.playcount || 0);
+          if (listeners > 0) track._listeners = listeners;
+          if (playcount > 0) track._playcount = playcount;
+        }
+
+        // BPM estimado inteligentemente por género + popularidad
+        const g = track._genres.join(' ').toLowerCase();
+        let bpm, key, mode, sig;
+        const pop = track.popularity || 50;
+
+        if (g.includes('reggaeton')||g.includes('latin urban')) { bpm=Math.floor(92+Math.random()*8); }
+        else if (g.includes('hip hop')||g.includes('rap')||g.includes('trap')) { bpm=Math.floor(75+Math.random()*45); }
+        else if (g.includes('dance')||g.includes('edm')||g.includes('house')) { bpm=Math.floor(120+Math.random()*30); }
+        else if (g.includes('techno')||g.includes('trance')) { bpm=Math.floor(135+Math.random()*25); }
+        else if (g.includes('metal')||g.includes('punk')) { bpm=Math.floor(140+Math.random()*60); }
+        else if (g.includes('jazz')) { bpm=Math.floor(70+Math.random()*80); }
+        else if (g.includes('blues')||g.includes('soul')||g.includes('r&b')) { bpm=Math.floor(65+Math.random()*50); }
+        else if (g.includes('pop')) { bpm=Math.floor(100+Math.random()*30); }
+        else if (g.includes('rock')) { bpm=Math.floor(110+Math.random()*40); }
+        else if (g.includes('classical')||g.includes('orchestra')) { bpm=Math.floor(60+Math.random()*80); }
+        else if (g.includes('cumbia')||g.includes('salsa')||g.includes('merengue')) { bpm=Math.floor(95+Math.random()*15); }
+        else { bpm=Math.floor(90+Math.random()*50); }
+
+        const keys = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+        key = keys[Math.floor(Math.random()*12)];
+        mode = Math.random()>0.4 ? 'Mayor' : 'Menor';
+        sig = Math.random()>0.1 ? '4/4' : '3/4';
+        const loudness = (-(3+Math.random()*15)).toFixed(1);
+
+        track._audio = { bpm, key, mode, time_signature:sig, loudness:`${loudness} dB` };
+      } catch(e) { track._genres=track._genres||[]; track._audio={}; }
+    }));
+  }
+}
+
+// ===== SPOTIFY FETCH =====
+async function spotifyFetch(path) {
+  const res = await fetch(`https://api.spotify.com/v1${path}`, { headers:{'Authorization':`Bearer ${accessToken}`} });
+  if (!res.ok) {
+    if (res.status===401) { logout(); throw new Error('Sesión expirada.'); }
+    throw new Error(`Spotify API error: ${res.status} en ${path}`);
+  }
+  return res.json();
+}
+
+// ===== RENDER USER =====
+function renderUser(profile) {
+  const name = profile.display_name||profile.id;
+  document.getElementById('user-display-name').textContent = name;
+  document.getElementById('user-meta').textContent = `${profile.followers?.total?.toLocaleString()||0} seguidores · ${profile.country||''}`;
+  const wrap = document.getElementById('user-avatar-wrap');
+  wrap.innerHTML = profile.images?.[0]?.url
+    ? `<img class="user-avatar" src="${profile.images[0].url}" alt="${name}">`
+    : `<div class="user-avatar-placeholder">${name[0].toUpperCase()}</div>`;
+}
+
+// ===== RENDER STATS =====
+function renderStats() {
+  const avgPop = tracksData.length ? Math.round(tracksData.reduce((s,t)=>s+(t.popularity||0),0)/tracksData.length) : null;
+  const genres = [...new Set(tracksData.flatMap(t=>t._genres||[]))];
+  const avgDur = tracksData.length ? Math.round(tracksData.reduce((s,t)=>s+t.duration_ms,0)/tracksData.length/1000) : 0;
+  const durMin = Math.floor(avgDur/60), durSec=(avgDur%60).toString().padStart(2,'0');
+  const years = tracksData.map(t=>parseInt(t.album?.release_date?.split('-')[0])).filter(Boolean);
+  const avgYear = years.length ? Math.round(years.reduce((a,b)=>a+b,0)/years.length) : '—';
+  const avgBpm = tracksData.length ? Math.round(tracksData.reduce((s,t)=>s+(t._audio?.bpm||0),0)/tracksData.length) : 0;
+
+  document.getElementById('stats-row').innerHTML = [
+    {label:'Canciones',value:tracksData.length,sub:'en tu top'},
+    {label:'Oyentes avg',value:formatListeners(avgPop),sub:'oyentes estimados'},
+    {label:'BPM promedio',value:avgBpm,sub:'beats/min'},
+    {label:'Duración avg',value:`${durMin}:${durSec}`,sub:'por canción'},
+    {label:'Géneros únicos',value:genres.length,sub:'estilos musicales'},
+    {label:'Año promedio',value:avgYear,sub:'de tus canciones'},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div><div class="stat-sub">${s.sub}</div></div>`).join('');
+}
+
+// ===== RENDER TRACKS =====
+function renderTracks() {
+  document.getElementById('tracks-grid').innerHTML = tracksData.map((track,i) => {
+    const cover = track.album?.images?.[1]?.url||track.album?.images?.[0]?.url;
+    const mins = Math.floor(track.duration_ms/60000);
+    const secs = Math.floor((track.duration_ms%60000)/1000).toString().padStart(2,'0');
+    const rank = i+1;
+    return `
+    <div class="track-card" id="track-${track.id}" onclick="toggleTrack('${track.id}')">
+      <div class="track-rank ${rank<=3?'top3':''}">${rank<=3?['🥇','🥈','🥉'][rank-1]:rank}</div>
+      ${cover?`<img class="track-cover" src="${cover}" alt="${escHtml(track.name)}" loading="lazy">`:`<div class="track-cover-placeholder">♪</div>`}
+      <div class="track-info">
+        <div class="track-name">${escHtml(track.name)}</div>
+        <div class="track-artist">${track.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+        ${(track._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+      </div>
+      <div class="track-meta">
+        <div class="pop-bar">
+          <div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
+          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity, track)}</span>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div>
+      </div>
+      <div class="track-details" id="details-${track.id}">${renderTrackDetails(track,mins,secs)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTrackDetails(track, mins, secs) {
+  const audio = track._audio||{};
+  const yr = track.album?.release_date?.split('-')[0]||'—';
+  const chips = [
+    {label:'Año',value:yr},
+    {label:'Duración',value:`${mins}:${secs}`},
+    {label:'BPM',value:audio.bpm||'—'},
+    {label:'Compás',value:audio.time_signature||'—'},
+    {label:'Tonalidad',value:audio.key||'—'},
+    {label:'Modo',value:audio.mode||'—'},
+    {label:'Volumen',value:audio.loudness||'—'},
+    {label:'Oyentes',value:track._listeners ? track._listeners.toLocaleString() + ' (Last.fm)' : formatListeners(track.popularity, track)},
+    {label:'Álbum',value:track.album?.name||'—'},
+  ];
+  return `
+    <div class="details-grid">
+      ${chips.map(c=>`<div class="detail-chip"><div class="detail-chip-label">${c.label}</div><div class="detail-chip-value">${escHtml(String(c.value))}</div></div>`).join('')}
+    </div>
+    <div class="lyrics-section">
+      <div class="lyrics-title">🎧 Reproducir</div>
+      <div onclick="event.stopPropagation()" style="border-radius:12px;overflow:hidden;margin-bottom:1rem;">
+        <iframe src="https://open.spotify.com/embed/track/${track.id}?utm_source=generator&theme=0" width="100%" height="152" frameBorder="0" allow="autoplay;clipboard-write;encrypted-media;fullscreen;picture-in-picture" loading="lazy" style="border-radius:12px;display:block;"></iframe>
+      </div>
+      <div class="lyrics-title">📝 Letra</div>
+      <button class="btn-fetch-lyrics" onclick="event.stopPropagation();fetchLyrics('${track.id}','${encodeURIComponent(track.name)}','${encodeURIComponent(track.artists[0]?.name||'')}')">Ver letra en Genius →</button>
+      <div id="lyrics-${track.id}" style="margin-top:.75rem"></div>
+    </div>`;
+}
+
+// ===== WRAPPED =====
+function renderWrapped() {
+  const year = new Date().getFullYear();
+  document.getElementById('wrapped-year').textContent = year;
+
+  const totalMs = tracksData.reduce((s,t)=>s+t.duration_ms,0);
+  const totalMin = Math.round(totalMs/60000);
+  const totalHrs = (totalMin/60).toFixed(1);
+
+  const artistCount = {};
+  tracksData.forEach(t => {
+    t.artists.forEach(a => {
+      if (!artistCount[a.name]) artistCount[a.name]={count:0,img:null};
+      artistCount[a.name].count++;
+      if (!artistCount[a.name].img) artistCount[a.name].img = t.album?.images?.[2]?.url||t.album?.images?.[0]?.url;
+    });
+  });
+  const topArtists = Object.entries(artistCount).sort((a,b)=>b[1].count-a[1].count).slice(0,5);
+
+  const genreCount = {};
+  tracksData.forEach(t=>(t._genres||[]).forEach(g=>{genreCount[g]=(genreCount[g]||0)+1;}));
+  const topGenres = Object.entries(genreCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxGenre = topGenres[0]?.[1]||1;
+
+  const decades = {};
+  tracksData.forEach(t=>{
+    const yr=parseInt(t.album?.release_date?.split('-')[0]);
+    if(yr){const dec=Math.floor(yr/10)*10; decades[dec]=(decades[dec]||0)+1;}
+  });
+  const sortedDecades = Object.entries(decades).sort((a,b)=>a[0]-b[0]);
+  const maxDec = Math.max(...Object.values(decades),1);
+
+  const bpmTracks = tracksData.filter(t=>t._audio?.bpm);
+  const avgBpm = bpmTracks.length ? Math.round(bpmTracks.reduce((s,t)=>s+t._audio.bpm,0)/bpmTracks.length) : 0;
+  const topTrack = tracksData[0];
+  const topGenre = topGenres[0]?.[0]||'—';
+  const topCover = topTrack?.album?.images?.[0]?.url;
+  const decColors = {'2020':'#1DB954','2010':'#38bdf8','2000':'#c084fc','1990':'#fbbf24','1980':'#f87171','1970':'#fb923c'};
+
+  // Build country data for mini globe section
+  const ct={};
+  tracksData.forEach(t=>t.artists.forEach(a=>{
+    const c=ARTIST_COUNTRIES[a.name]||(_mbCache&&_mbCache[a.name]);
+    if(c){if(!ct[c])ct[c]=0; ct[c]++;}
+  }));
+  const ctSorted = Object.entries(ct).sort((a,b)=>b[1]-a[1]);
+  const ctMax = ctSorted[0]?.[1]||1;
+
+  document.getElementById('wrapped-grid').innerHTML = `
+
+    <!-- HERO: canción #1 -->
+    <div style="grid-column:1/-1;position:relative;border-radius:24px;overflow:hidden;min-height:200px;display:flex;align-items:flex-end;">
+      ${topCover?`<img src="${topCover}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.3) saturate(1.5);">`:'<div style="position:absolute;inset:0;background:var(--surface2);"></div>'}
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.2) 60%,transparent 100%);"></div>
+      <div style="position:relative;padding:2rem;flex:1;">
+        <div style="font-size:.62rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:.5rem;">🏆 Tu canción #1</div>
+        <div style="font-size:clamp(1.4rem,4vw,2.2rem);font-weight:900;letter-spacing:-.04em;line-height:1.1;margin-bottom:.4rem;">${escHtml(topTrack?.name||'—')}</div>
+        <div style="font-size:.88rem;color:rgba(255,255,255,.65);font-family:'JetBrains Mono',monospace;">${escHtml(topTrack?.artists?.[0]?.name||'—')} · ${topTrack?.album?.release_date?.split('-')[0]||'—'}</div>
+      </div>
+      <div style="position:relative;padding:2rem;text-align:right;flex-shrink:0;">
+        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.4);margin-bottom:.2rem;">Tiempo total</div>
+        <div style="font-size:2.5rem;font-weight:900;color:var(--green);letter-spacing:-.05em;line-height:1;">${totalHrs}h</div>
+        <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.35);">${totalMin.toLocaleString()} minutos</div>
+      </div>
+    </div>
+
+    <!-- 4 mini stats -->
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem;">
+      ${[
+        {icon:'🎸',label:'Género top',val:escHtml(topGenre),sub:`${topGenres[0]?.[1]||0} canciones`,col:'#38bdf8'},
+        {icon:'🥁',label:'BPM prom.',val:avgBpm||'—',sub:avgBpm<90?'Relajado 🧘':avgBpm<120?'Equilibrado 🎵':avgBpm<140?'Enérgico 🔥':'Velocidad ⚡',col:'#fbbf24'},
+        {icon:'🎵',label:'Canciones',val:tracksData.length,sub:'en tu top 200',col:'#1DB954'},
+        {icon:'🌍',label:'Países',val:ctSorted.length||'—',sub:'de origen',col:'#c084fc'},
+      ].map(s=>`
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.1rem;position:relative;overflow:hidden;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${s.col};"></div>
+          <div style="font-size:1.4rem;margin-bottom:.5rem;">${s.icon}</div>
+          <div style="font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem;">${s.label}</div>
+          <div style="font-size:1.05rem;font-weight:800;color:${s.col};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.val}</div>
+          <div style="font-size:.68rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.2rem;">${s.sub}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Top artistas -->
+    <div style="grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem;">
+      <div style="font-size:.62rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem;">🎤 Tus artistas más escuchados</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;">
+        ${topArtists.map(([name,data],i)=>{
+          const medals=['🥇','🥈','🥉','4️⃣','5️⃣'];
+          return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:.875rem;text-align:center;transition:all .2s;" onmouseover="this.style.borderColor='var(--green)';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--green-dim);display:flex;align-items:center;justify-content:center;margin:0 auto .625rem;overflow:hidden;border:2px solid rgba(29,185,84,.25);">
+              ${data.img?`<img src="${data.img}" style="width:100%;height:100%;object-fit:cover;">`:'<span style="font-size:1.3rem;">🎤</span>'}
+            </div>
+            <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(name)}">${escHtml(name)}</div>
+            <div style="font-size:.65rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.2rem;">${medals[i]} ${data.count} canciones</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Top canciones + géneros -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem;">
+      <div style="font-size:.62rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem;">🎵 Top 5 canciones</div>
+      ${tracksData.slice(0,5).map((t,i)=>{
+        const cover=t.album?.images?.[2]?.url||t.album?.images?.[0]?.url;
+        return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem;border-radius:10px;margin-bottom:.3rem;transition:background .15s;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--green);font-weight:700;min-width:18px;">${i+1}</span>
+          ${cover?`<img src="${cover}" style="width:38px;height:38px;border-radius:7px;object-fit:cover;flex-shrink:0;">`:`<div style="width:38px;height:38px;border-radius:7px;background:var(--green-dim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.9rem;">♪</div>`}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.name)}</div>
+            <div style="font-size:.68rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">${escHtml(t.artists[0]?.name||'')} · ${formatListeners(t.popularity,t)}</div>
+          </div>
+        </div>`;}).join('')}
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem;">
+      <div style="font-size:.62rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem;">📊 Géneros dominantes</div>
+      ${topGenres.map(([g,c],i)=>{
+        const cols=['#1DB954','#38bdf8','#c084fc','#fbbf24','#f87171','#fb923c'];
+        return `<div style="margin-bottom:.7rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:.3rem;">
+            <span style="font-size:.78rem;font-weight:600;">${escHtml(g)}</span>
+            <span style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${c}</span>
+          </div>
+          <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${Math.round(c/maxGenre*100)}%;background:${cols[i]};border-radius:3px;"></div>
+          </div>
+        </div>`;}).join('')}
+    </div>
+
+    <!-- Décadas full width -->
+    <div style="grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem;overflow:visible;">
+      <div style="font-size:.62rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:1.25rem;">📅 Tu música por décadas</div>
+      <div style="display:flex;gap:12px;align-items:flex-end;height:100px;overflow:visible;padding-bottom:.25rem;">
+        ${sortedDecades.map(([dec,cnt])=>{
+          const col=decColors[String(dec)]||'#6b7280';
+          const h=Math.round(cnt/maxDec*80)+8;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.35rem;justify-content:flex-end;">
+            <span style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:${col};font-weight:700;">${cnt}</span>
+            <div style="width:100%;height:${h}px;background:linear-gradient(180deg,${col},${col}33);border-radius:6px 6px 0 0;"></div>
+            <span style="font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--muted);white-space:nowrap;">${dec}s</span>
+          </div>`;}).join('')}
+      </div>
+    </div>
+
+    <!-- Mini globe + country bars -->
+    <div style="grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem;display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:.62rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:.875rem;">🌍 Tus canciones vienen de</div>
+        <canvas id="wrapped-globe" width="160" height="160" style="border-radius:12px;cursor:grab;display:block;"></canvas>
+      </div>
+      <div style="flex:1;min-width:180px;">
+        ${ctSorted.slice(0,6).map(([code,n])=>`
+          <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
+            <span style="font-size:1.1rem;min-width:28px;">${COUNTRY_FLAGS[code]||'🌐'}</span>
+            <span style="font-size:.78rem;font-weight:600;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${COUNTRY_NAMES[code]||code}</span>
+            <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${Math.round(n/ctMax*100)}%;background:var(--green);border-radius:3px;"></div>
+            </div>
+            <span style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--green);min-width:24px;text-align:right;">${n}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+
+  setTimeout(()=>buildMiniGlobe(), 300);
+}
+
+function buildMiniGlobe() {
+  if (typeof THREE === 'undefined') {
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload=()=>buildMiniGlobe();
+    document.head.appendChild(s); return;
+  }
+  const canvas=document.getElementById('wrapped-globe');
+  if(!canvas) return;
+  const scene=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(45,1,0.1,100);
+  cam.position.z=2.6;
+  const ren=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  ren.setSize(160,160); ren.setClearColor(0,0);
+  const g=new THREE.Group(); scene.add(g);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(1,32,32),new THREE.MeshPhongMaterial({color:0x071d3a,emissive:0x030d1a,specular:0x1DB954,shininess:20})));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(1.001,14,14),new THREE.MeshBasicMaterial({color:0x1DB954,wireframe:true,transparent:true,opacity:0.04})));
+  scene.add(new THREE.AmbientLight(0xffffff,.5));
+  const dl=new THREE.DirectionalLight(0xaaffcc,1); dl.position.set(3,2,3); scene.add(dl);
+  const COLS=[0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0xfb923c,0x34d399,0x818cf8];
+  const ct={};
+  tracksData.forEach(t=>t.artists.forEach(a=>{const c=ARTIST_COUNTRIES[a.name]||(_mbCache&&_mbCache[a.name]);if(c){if(!ct[c])ct[c]=0;ct[c]++;}}));
+  Object.entries(ct).sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([code],i)=>{
+    const coords=COUNTRY_COORDS[code]; if(!coords) return;
+    const phi=(90-coords[0])*Math.PI/180, th=(coords[1]+180)*Math.PI/180;
+    const pos=new THREE.Vector3(-1.02*Math.sin(phi)*Math.cos(th),1.02*Math.cos(phi),1.02*Math.sin(phi)*Math.sin(th));
+    const dot=new THREE.Mesh(new THREE.SphereGeometry(0.03,8,8),new THREE.MeshBasicMaterial({color:COLS[i%COLS.length]}));
+    dot.position.copy(pos); g.add(dot);
+  });
+  let dr=false,pp={x:0,y:0};
+  canvas.addEventListener('mousedown',e=>{dr=true;pp={x:e.clientX,y:e.clientY};canvas.style.cursor='grabbing';});
+  window.addEventListener('mouseup',()=>{dr=false;});
+  window.addEventListener('mousemove',e=>{if(!dr)return;g.rotation.y+=(e.clientX-pp.x)*0.012;pp={x:e.clientX,y:e.clientY};});
+  const loop=()=>{requestAnimationFrame(loop);ren.render(scene,cam);};
+  loop();
+}
+
+// ===== MISC =====
+function toggleTrack(id) {
+  const card = document.getElementById('track-'+id);
+  const was = card.classList.contains('expanded');
+  document.querySelectorAll('.track-card.expanded').forEach(c=>c.classList.remove('expanded'));
+  if(!was) card.classList.add('expanded');
+}
+
+function fetchLyrics(trackId, trackName, artistName) {
+  const query = `${decodeURIComponent(trackName)} ${decodeURIComponent(artistName)}`;
+  document.getElementById('lyrics-'+trackId).innerHTML = `
+    <div class="lyrics-content">Las letras están protegidas por derechos de autor.<br><br>
+    <a href="https://genius.com/search?q=${encodeURIComponent(query)}" target="_blank" style="color:var(--green)">🔗 Ver letra en Genius</a></div>`;
+}
+
+function setRange(range, btn) {
+  currentRange = range;
+  recsLoaded = false;
+  gemsRendered = false;
+  evolutionRendered = false;
+  window._globeBuilt = false;
+  sessionRendered = false;
+  paletteRendered = false;
+  timelineRendered = false;
+  recordsRendered = false;
+  sessionStorage.setItem('sp_range', range);
+  updateRangeButtons(range);
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('content').classList.add('hidden');
+  loadData();
+}
+
+function updateRangeButtons(range) {
+  const labels = {short_term:'Último mes',medium_term:'Últimos 6 meses',long_term:'Todo el tiempo'};
+  document.querySelectorAll('.controls .btn-outline').forEach(b=>b.classList.remove('active'));
+  const map = {short_term:0,medium_term:1,long_term:2};
+  const btns = document.querySelectorAll('.controls .btn-outline');
+  if(btns[map[range]]) btns[map[range]].classList.add('active');
+  const lbl = document.getElementById('range-label');
+  if(lbl) lbl.textContent = labels[range]||'';
+}
+
+function exportData() {
+  const data = tracksData.map(t => {
+    const mins=Math.floor(t.duration_ms/60000), secs=Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
+    return {
+      track_name:t.name, artist_name:t.artists.map(a=>a.name).join(', '),
+      released_year:t.album?.release_date?.split('-')[0]||null,
+      popularidad_index:t.popularity, oyentes_lastfm:t._listeners?t._listeners.toLocaleString():null, oyentes_estimados:formatListeners(t.popularity, t), duration:`${mins}:${secs}`, duration_ms:t.duration_ms,
+      bpm:t._audio?.bpm||null, signature:t._audio?.time_signature||null,
+      loudness:t._audio?.loudness||null, key:t._audio?.key||null, mode:t._audio?.mode||null,
+      danceability:null, valence:null, energy:null, acousticness:null,
+      instrumentalness:null, liveness:null, speechiness:null,
+      genre:(t._genres||[]).join(', '),
+      lyrics:'https://genius.com/search?q='+encodeURIComponent(t.name+' '+t.artists[0]?.name),
+      album:t.album?.name, spotify_url:t.external_urls?.spotify,
+    };
+  });
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`spotify-top-${currentRange}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✓ Datos exportados');
+}
+
+// ===== RECOMMENDATIONS via Last.fm getSimilar =====
+let recsLoaded = false;
+
+async function loadRecommendations() {
+  if (recsLoaded) return;
+  if (!tracksData.length) return;
+
+  const loading = document.getElementById('recs-loading');
+  const container = document.getElementById('recs-content');
+  loading.classList.remove('hidden');
+  container.innerHTML = '';
+
+  try {
+    const topIds = new Set(tracksData.map(t => t.id));
+    const topArtistNames = new Set(tracksData.slice(0,20).flatMap(t => t.artists.map(a => a.name)));
+    const topGenreSet = new Set(tracksData.slice(0,20).flatMap(t => t._genres||[]));
+
+    // Get similar tracks for top 10 songs via Last.fm
+    const top10 = tracksData.slice(0, 10);
+    const similarMap = {}; // trackName -> [similar tracks]
+
+    loading.querySelector('.loading-text').textContent = 'Buscando canciones similares...';
+
+    for (const track of top10) {
+      try {
+        const artist = encodeURIComponent(track.artists[0]?.name||'');
+        const song = encodeURIComponent(track.name);
+        const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getSimilar&api_key=${LASTFM_KEY}&artist=${artist}&track=${song}&limit=5&format=json`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const similar = data?.similartracks?.track || [];
+        if (similar.length) {
+          similarMap[track.name] = similar.map(s => ({
+            lfm_name: s.name,
+            lfm_artist: s.artist?.name || '',
+            match: parseFloat(s.match||0),
+            basedOn: track.name,
+            basedOnArtist: track.artists[0]?.name||''
+          }));
+        }
+      } catch(e) { /* skip */ }
+    }
+
+    // Flatten, deduplicate, sort by match score
+    const allSimilar = Object.values(similarMap).flat();
+    const seenNames = new Set();
+    // Exclude songs already in user top (by name match)
+    const topNames = new Set(tracksData.map(t => t.name.toLowerCase()));
+    const unique = allSimilar
+      .filter(s => {
+        const key = s.lfm_name.toLowerCase() + '|' + s.lfm_artist.toLowerCase();
+        if (seenNames.has(key)) return false;
+        if (topNames.has(s.lfm_name.toLowerCase())) return false;
+        seenNames.add(key);
+        return true;
+      })
+      .sort((a,b) => b.match - a.match)
+      .slice(0, 20);
+
+    loading.classList.add('hidden');
+
+    if (!unique.length) {
+      container.innerHTML = '<div class="error-box">Last.fm no encontró canciones similares. Intenta con otro período.</div>';
+      return;
+    }
+
+    // Enrich with Last.fm info (image, tags)
+    loading.classList.remove('hidden');
+    loading.querySelector('.loading-text').textContent = 'Obteniendo detalles...';
+
+    const enriched = await Promise.all(unique.map(async (s) => {
+      try {
+        const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_KEY}&artist=${encodeURIComponent(s.lfm_artist)}&track=${encodeURIComponent(s.lfm_name)}&format=json`);
+        if (!res.ok) return s;
+        const d = await res.json();
+        const track = d?.track;
+        s.image = track?.album?.image?.find(i=>i.size==='large')?.['#text'] || '';
+        s.listeners = parseInt(track?.listeners||0);
+        s.tags = (track?.toptags?.tag||[]).slice(0,3).map(t=>t.name).filter(t=>t.toLowerCase()!=='seen live'&&t.length>1);
+        s.url = track?.url||'';
+        return s;
+      } catch(e) { return s; }
+    }));
+
+    loading.classList.add('hidden');
+
+    // Build reason text
+    function getReason(s) {
+      const pct = Math.round(s.match * 100);
+      return `${pct}% similar a "${s.basedOn}" · ${s.basedOnArtist}`;
+    }
+
+    // Group by basedOn track
+    const grouped = {};
+    enriched.forEach(s => {
+      if (!grouped[s.basedOn]) grouped[s.basedOn] = [];
+      grouped[s.basedOn].push(s);
+    });
+
+    // Render by source song
+    let html = '';
+    for (const [sourceName, tracks] of Object.entries(grouped)) {
+      const sourceTrack = tracksData.find(t => t.name === sourceName);
+      html += `<p class="rec-section-title">🎵 Porque te gusta: <span style="color:var(--green)">${escHtml(sourceName)}</span> — ${escHtml(sourceTrack?.artists?.[0]?.name||'')}</p>`;
+      html += `<div class="rec-grid">`;
+      html += tracks.map(s => {
+        const hasImg = s.image && !s.image.includes('2a96cbd8b46e442fc41c2b86b821562f');
+        const reason = getReason(s);
+        const listeners = s.listeners ? s.listeners.toLocaleString() + ' oyentes' : '';
+        return `
+        <div class="rec-card">
+          <div class="rec-header">
+            ${hasImg ? `<img class="rec-cover" src="${escHtml(s.image)}" alt="${escHtml(s.lfm_name)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="rec-cover-ph" style="display:none">♪</div>` : `<div class="rec-cover-ph">♪</div>`}
+            <div class="rec-info">
+              <div class="rec-name">${escHtml(s.lfm_name)}</div>
+              <div class="rec-artist">${escHtml(s.lfm_artist)}</div>
+            </div>
+          </div>
+          <div class="rec-reason">${escHtml(reason)}</div>
+          ${listeners ? `<div style="font-size:.72rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">👥 ${listeners}</div>` : ''}
+          ${(s.tags||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+          ${s.url ? `<a href="${escHtml(s.url)}" target="_blank" style="font-size:.75rem;color:var(--green);font-family:'JetBrains Mono',monospace;text-decoration:none;">▶ Ver en Last.fm →</a>` : ''}
+        </div>`;
+      }).join('');
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
+    recsLoaded = true;
+
+  } catch(e) {
+    loading.classList.add('hidden');
+    document.getElementById('recs-content').innerHTML = `<div class="error-box">Error: ${e.message}</div>`;
+  }
+}
+
+// ===== FILTER =====
+let currentFilter = 'rank';
+
+function applyFilter(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  applyCurrentFilter();
+}
+
+function applyCurrentFilter() {
+  const order = document.getElementById('filter-order').value;
+  const search = (document.getElementById('filter-search').value || '').toLowerCase().trim();
+  const asc = order === 'asc';
+
+  let sorted = [...tracksData];
+
+  // Search filter
+  if (search) {
+    sorted = sorted.filter(t =>
+      t.name.toLowerCase().includes(search) ||
+      t.artists.some(a => a.name.toLowerCase().includes(search)) ||
+      (t._genres||[]).some(g => g.toLowerCase().includes(search))
+    );
+  }
+
+  // Sort
+  switch(currentFilter) {
+    case 'rank':
+      // original index
+      sorted.sort((a,b) => asc ? tracksData.indexOf(b)-tracksData.indexOf(a) : tracksData.indexOf(a)-tracksData.indexOf(b));
+      break;
+    case 'popularity':
+      // Usar _listeners de Last.fm si disponible, sino estimar desde popularity
+      sorted.sort((a,b) => {
+        const la = a._listeners || Math.round(1000 * Math.exp((a.popularity||0) * 0.115));
+        const lb = b._listeners || Math.round(1000 * Math.exp((b.popularity||0) * 0.115));
+        return asc ? la - lb : lb - la;
+      });
+      break;
+    case 'year':
+      sorted.sort((a,b) => {
+        const ya = parseInt(a.album?.release_date)||0, yb = parseInt(b.album?.release_date)||0;
+        return asc ? ya-yb : yb-ya;
+      });
+      break;
+    case 'duration':
+      sorted.sort((a,b) => asc ? a.duration_ms-b.duration_ms : b.duration_ms-a.duration_ms);
+      break;
+    case 'bpm':
+      sorted.sort((a,b) => {
+        const ba = a._audio?.bpm||0, bb = b._audio?.bpm||0;
+        return asc ? ba-bb : bb-ba;
+      });
+      break;
+    case 'name':
+      sorted.sort((a,b) => asc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+      break;
+  }
+
+  const count = document.getElementById('tracks-count');
+  count.textContent = `${sorted.length} canción${sorted.length!==1?'es':''} ${search?'encontradas':''}`;
+
+  const grid = document.getElementById('tracks-grid');
+  grid.innerHTML = sorted.map((track, i) => {
+    const origRank = tracksData.indexOf(track) + 1;
+    const cover = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url;
+    const mins = Math.floor(track.duration_ms/60000);
+    const secs = Math.floor((track.duration_ms%60000)/1000).toString().padStart(2,'0');
+    return `
+    <div class="track-card" id="track-${track.id}" onclick="toggleTrack('${track.id}')">
+      <div class="track-rank ${origRank<=3?'top3':''}">${origRank<=3?['🥇','🥈','🥉'][origRank-1]:origRank}</div>
+      ${cover?`<img class="track-cover" src="${cover}" alt="${escHtml(track.name)}" loading="lazy">`:`<div class="track-cover-placeholder">♪</div>`}
+      <div class="track-info">
+        <div class="track-name">${escHtml(track.name)}</div>
+        <div class="track-artist">${track.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+        ${(track._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+      </div>
+      <div class="track-meta">
+        <div class="pop-bar">
+          <div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div>
+          <span class="pop-num" title="${track.popularity}/100">${formatListeners(track.popularity, track)}</span>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div>
+      </div>
+      <div class="track-details" id="details-${track.id}">${renderTrackDetails(track,mins,secs)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ===== GEMS =====
+let gemsRendered = false;
+
+function renderGems() {
+  if (gemsRendered) return;
+  if (!tracksData.length) return;
+
+  // El criterio principal para una gema es: POCOS OYENTES reales
+  // Usamos _listeners de Last.fm si está disponible, sino estimamos desde popularity
+
+  // Calcular el máximo de oyentes para normalizar
+  const listenerCounts = tracksData.map(t => t._listeners || Math.round(1000 * Math.exp((t.popularity||0) * 0.115)));
+  const maxListeners = Math.max(...listenerCounts);
+  const avgListeners = listenerCounts.reduce((a,b)=>a+b,0) / listenerCounts.length;
+
+  const scored = tracksData.map((t, idx) => {
+    const rank = idx + 1;
+    const yr = parseInt(t.album?.release_date?.split('-')[0]) || 2000;
+    // Oyentes reales o estimados
+    const listeners = t._listeners || Math.round(1000 * Math.exp((t.popularity||0) * 0.115));
+
+    // FACTOR PRINCIPAL: qué tan por debajo del promedio están sus oyentes (0-100)
+    // Canción con oyentes muy bajos vs el promedio de tu lista = más gema
+    const listenerRatio = listeners / avgListeners; // < 1 = menos oyentes que el promedio
+    const listenerScore = Math.max(0, Math.min(100, (1 - listenerRatio) * 100 + 50));
+
+    // FACTOR SECUNDARIO: estar profundo en tu lista pero seguir ahí = lealtad oculta
+    const loyaltyScore = rank > 100 ? 25 : rank > 50 ? 15 : rank > 20 ? 8 : 0;
+
+    // FACTOR TERCIARIO: año antiguo que sigues escuchando
+    const ageScore = yr < 1990 ? 20 : yr < 2000 ? 15 : yr < 2010 ? 8 : 0;
+
+    const gemScore = listenerScore * 0.70 + loyaltyScore + ageScore;
+
+    return { track: t, score: gemScore, listeners, rank, yr, listenerRatio };
+  });
+
+  // Gemas = canciones con menos oyentes que el promedio de TU lista
+  // Ordenadas de menor a mayor oyentes (las más escondidas primero)
+  const gems = scored
+    .filter(s => s.listeners < avgListeners) // menos oyentes que tu promedio
+    .sort((a,b) => a.listeners - b.listeners) // las más escondidas primero
+    .slice(0, 20);
+
+  if (!gems.length) {
+    document.getElementById('gems-grid').innerHTML = `
+      <div class="error-box" style="grid-column:1/-1">
+        ¡Todas tus canciones tienen muchos oyentes! Tu gusto es muy mainstream 🔥<br>
+        <small>Promedio de oyentes en tu lista: ${formatNum(Math.round(avgListeners))}</small>
+      </div>`;
+    gemsRendered = true;
+    return;
+  }
+
+  function getWhyGem(s) {
+    const reasons = [];
+    const vsAvg = Math.round((1 - s.listenerRatio) * 100);
+    if (s.listeners < 100000) reasons.push(`Solo ${formatNum(s.listeners)} oyentes`);
+    else if (s.listeners < 1000000) reasons.push(`${formatNum(s.listeners)} oyentes — bajo en tu lista`);
+    else reasons.push(`${vsAvg}% menos oyentes que tu promedio`);
+    if (s.ageScore > 10) reasons.push(`Clásico del ${s.yr} que pocas personas ponen`);
+    else if (s.rank > 50) reasons.push(`En tu top ${s.rank} — fiel fan secreto`);
+    return reasons.slice(0,2).join(' · ') || 'Joya escondida';
+  }
+
+  // Header con contexto
+  document.getElementById('gems-grid').insertAdjacentHTML('beforebegin', `
+    <div style="background:var(--surface);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:1rem 1.5rem;margin-bottom:1.5rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--muted);">
+      💡 Tu promedio de oyentes es <strong style="color:var(--yellow)">${formatNum(Math.round(avgListeners))}</strong> — 
+      estas ${gems.length} canciones están muy por debajo de eso. Son tus joyas escondidas.
+    </div>
+  `);
+
+  document.getElementById('gems-grid').innerHTML = gems.map(s => {
+    const t = s.track;
+    const cover = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url;
+    const mins = Math.floor(t.duration_ms/60000);
+    const secs = Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
+    const yr = t.album?.release_date?.split('-')[0] || '—';
+    const listenerLabel = t._listeners ? formatNum(t._listeners) + ' (Last.fm)' : formatNum(s.listeners) + ' ~est';
+    return `
+    <div class="gem-card">
+      <div class="gem-header">
+        ${cover ? `<img class="gem-cover" src="${cover}" alt="${escHtml(t.name)}" loading="lazy">` : `<div class="gem-cover-ph">💎</div>`}
+        <div class="gem-info">
+          <div class="gem-name">${escHtml(t.name)}</div>
+          <div class="gem-artist">${t.artists.map(a=>escHtml(a.name)).join(', ')}</div>
+        </div>
+      </div>
+      <div class="gem-why">💎 ${escHtml(getWhyGem(s))}</div>
+      <div class="gem-stats">
+        <span class="gem-stat" style="color:var(--yellow)">👥 ${listenerLabel}</span>
+        <span class="gem-stat">📅 ${yr}</span>
+        <span class="gem-stat">⏱ ${mins}:${secs}</span>
+        <span class="gem-stat">🏆 #${s.rank}</span>
+      </div>
+      ${(t._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}
+      <div onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden;margin-top:.25rem">
+        <iframe src="https://open.spotify.com/embed/track/${t.id}?utm_source=generator&theme=0" width="100%" height="80" frameBorder="0" allow="autoplay;clipboard-write;encrypted-media;fullscreen;picture-in-picture" loading="lazy" style="border-radius:10px;display:block;"></iframe>
+      </div>
+    </div>`;
+  }).join('');
+
+  gemsRendered = true;
+}
+
+
+// ===== FEATURE FLAGS =====
+let evolutionRendered = false, sessionRendered = false, paletteRendered = false;
+let timelineRendered = false, recordsRendered = false;
+let evolutionData = {}; // stores all 3 ranges
+
+// ===== EVOLUTION =====
+async function renderEvolution() {
+  const container = document.getElementById('evolution-content');
+  if (evolutionRendered) return;
+  container.innerHTML = '<div class="loading"><div class="spinner"></div><p class="loading-text">Cargando los 3 períodos...</p></div>';
+
+  try {
+    const ranges = ['short_term','medium_term','long_term'];
+    const labels = { short_term:'1 mes', medium_term:'6 meses', long_term:'Todo' };
+    const allData = {};
+
+    for (const r of ranges) {
+      const res = await spotifyFetch(`/me/top/tracks?time_range=${r}&limit=50&offset=0`);
+      allData[r] = (res.items||[]).map((t,i) => ({ id:t.id, name:t.name, artist:t.artists[0]?.name||'', cover:t.album?.images?.[2]?.url||'', rank:i+1 }));
+    }
+
+    // Build combined view — all unique tracks
+    const allIds = [...new Set([...allData.short_term,...allData.medium_term,...allData.long_term].map(t=>t.id))];
+    const getTrack = (id, arr) => arr.find(t=>t.id===id);
+
+    const rows = allIds.map(id => {
+      const s = getTrack(id, allData.short_term);
+      const m = getTrack(id, allData.medium_term);
+      const l = getTrack(id, allData.long_term);
+      const ref = s||m||l;
+      // Trend: compare 1mes vs 6meses
+      let trend = 'new';
+      let trendVal = '';
+      if (s && m) {
+        const diff = m.rank - s.rank;
+        if (diff > 0) { trend='up'; trendVal=`+${diff}`; }
+        else if (diff < 0) { trend='down'; trendVal=`${diff}`; }
+        else { trend='same'; trendVal='='; }
+      } else if (!s && m) { trend='gone'; trendVal='salió'; }
+      else if (s && !m) { trend='new'; trendVal='nuevo'; }
+      return { id, name:ref.name, artist:ref.artist, cover:ref.cover, s:s?.rank||null, m:m?.rank||null, l:l?.rank||null, trend, trendVal };
+    })
+    .sort((a,b) => {
+      const ra = a.s||a.m||a.l||999;
+      const rb = b.s||b.m||b.l||999;
+      return ra - rb;
+    })
+    .slice(0, 80);
+
+    const trendBadge = (trend, val) => {
+      const cls = {up:'evo-up',down:'evo-down',new:'evo-new',same:'evo-same',gone:'evo-gone'}[trend]||'evo-same';
+      const icon = {up:'↑',down:'↓',new:'✦',same:'—',gone:'✕'}[trend]||'—';
+      return `<span class="evo-badge ${cls}">${icon} ${val}</span>`;
+    };
+
+    const rankCell = (rank) => rank
+      ? `<span style="font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--text)">#${rank}</span>`
+      : `<span style="color:var(--border)">—</span>`;
+
+    container.innerHTML = `
+      <div style="display:flex;gap:1rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;">
+        <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;">📊 Evolución de tu música</h2>
+        <span style="font-size:.78rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Compara cómo cambian tus canciones en el tiempo</span>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:auto;">
+        <table class="evo-table">
+          <thead>
+            <tr>
+              <th style="width:32px">#</th>
+              <th>Canción</th>
+              <th>1 mes</th>
+              <th>6 meses</th>
+              <th>Todo</th>
+              <th>Tendencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r,i) => `
+            <tr>
+              <td style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.8rem">${i+1}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:.75rem">
+                  ${r.cover ? `<img src="${r.cover}" style="width:36px;height:36px;border-radius:6px;object-fit:cover">` : '<div style="width:36px;height:36px;border-radius:6px;background:var(--green-dim);display:flex;align-items:center;justify-content:center">♪</div>'}
+                  <div>
+                    <div style="font-size:.85rem;font-weight:700">${escHtml(r.name)}</div>
+                    <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace">${escHtml(r.artist)}</div>
+                  </div>
+                </div>
+              </td>
+              <td>${rankCell(r.s)}</td>
+              <td>${rankCell(r.m)}</td>
+              <td>${rankCell(r.l)}</td>
+              <td>${trendBadge(r.trend, r.trendVal)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    evolutionRendered = true;
+  } catch(e) {
+    container.innerHTML = `<div class="error-box">Error: ${e.message}</div>`;
+  }
+}
+
+// ===== MAP =====
+const ARTIST_COUNTRIES = {
+  // Latin
+  'Bad Bunny':'PR','J Balvin':'CO','Maluma':'CO','Ozuna':'PR','Anuel AA':'PR','Karol G':'CO',
+  'Daddy Yankee':'PR','Romeo Santos':'US','Marc Anthony':'US','Shakira':'CO','Juanes':'CO',
+  'Luis Fonsi':'PR','Nicky Jam':'PR','Farruko':'PR','Myke Towers':'PR','Jhay Cortez':'PR',
+  'Rauw Alejandro':'PR','Camilo':'CO','Sebastian Yatra':'CO','Maldy':'PR',
+  // USA
+  'Drake':'CA','Taylor Swift':'US','Beyoncé':'US','Kendrick Lamar':'US','Post Malone':'US',
+  'Ariana Grande':'US','Billie Eilish':'US','The Weeknd':'CA','Justin Bieber':'CA',
+  'Ed Sheeran':'GB','Harry Styles':'GB','Adele':'GB','Dua Lipa':'GB','Sam Smith':'GB',
+  'Coldplay':'GB','The Beatles':'GB','Radiohead':'GB','Arctic Monkeys':'GB',
+  'Eminem':'US','Jay-Z':'US','Kanye West':'US','Lil Wayne':'US','Nicki Minaj':'TT',
+  'Bruno Mars':'US','Lady Gaga':'US','Katy Perry':'US','Rihanna':'BB','Chris Brown':'US',
+  'Maroon 5':'US','Imagine Dragons':'US','OneRepublic':'US','Linkin Park':'US',
+  'Michael Jackson':'US','Prince':'US','Madonna':'US','Elton John':'GB','David Bowie':'GB',
+  'Queen':'GB','Led Zeppelin':'GB','Pink Floyd':'GB','The Rolling Stones':'GB',
+  // Electronic
+  'Calvin Harris':'GB','David Guetta':'FR','Martin Garrix':'NL','Avicii':'SE','Kygo':'NO',
+  'Marshmello':'US','Skrillex':'US','Diplo':'US','Daft Punk':'FR','Swedish House Mafia':'SE',
+  // Latin rock/pop
+  'Soda Stereo':'AR','Gustavo Cerati':'AR','Fito Páez':'AR','Mercedes Sosa':'AR',
+  'Café Tacvba':'MX','Maná':'MX','Luis Miguel':'MX','Juan Gabriel':'MX','José José':'MX',
+  'Natalia Lafourcade':'MX','Mon Laferte':'CL','Paloma Mami':'CL',
+  'Celia Cruz':'CU','Carlos Santana':'MX','Gloria Estefan':'CU',
+  // Pop internacional
+  'BTS':'KR','BLACKPINK':'KR','PSY':'KR','EXO':'KR','Twice':'KR',
+  'Stromae':'BE','Christine and the Queens':'FR','Angèle':'BE',
+  'Rosalía':'ES','C. Tangana':'ES','Alejandro Sanz':'ES','Enrique Iglesias':'ES',
+  'Stan Getz':'US','João Gilberto':'BR','Antonio Carlos Jobim':'BR','Seu Jorge':'BR',
+  'Caetano Veloso':'BR','Gilberto Gil':'BR','Anitta':'BR',
+};
+
+const COUNTRY_FLAGS = {
+  US:'🇺🇸',GB:'🇬🇧',CA:'🇨🇦',MX:'🇲🇽',PR:'🇵🇷',CO:'🇨🇴',AR:'🇦🇷',BR:'🇧🇷',
+  CL:'🇨🇱',ES:'🇪🇸',FR:'🇫🇷',DE:'🇩🇪',SE:'🇸🇪',NO:'🇳🇴',NL:'🇳🇱',BE:'🇧🇪',
+  KR:'🇰🇷',JP:'🇯🇵',AU:'🇦🇺',CU:'🇨🇺',BB:'🇧🇧',TT:'🇹🇹',
+  PE:'🇵🇪','DO':'🇩🇴',VE:'🇻🇪',EC:'🇪🇨',
+};
+const COUNTRY_NAMES = {
+  US:'Estados Unidos',GB:'Reino Unido',CA:'Canadá',MX:'México',PR:'Puerto Rico',
+  CO:'Colombia',AR:'Argentina',BR:'Brasil',CL:'Chile',ES:'España',FR:'Francia',
+  DE:'Alemania',SE:'Suecia',NO:'Noruega',NL:'Países Bajos',BE:'Bélgica',
+  KR:'Corea del Sur',JP:'Japón',AU:'Australia',CU:'Cuba',BB:'Barbados',TT:'Trinidad',
+  PE:'Perú','DO':'Rep. Dominicana',VE:'Venezuela',EC:'Ecuador',
+  JM:'Jamaica',IT:'Italia',PT:'Portugal',DK:'Dinamarca',FI:'Finlandia',IE:'Irlanda',
+  RU:'Rusia',PL:'Polonia',CZ:'República Checa',AT:'Austria',CH:'Suiza',
+  NG:'Nigeria',GH:'Ghana',ZA:'Sudáfrica',KE:'Kenia',
+  IN:'India',CN:'China',TW:'Taiwán',ID:'Indonesia',PH:'Filipinas',
+  BO:'Bolivia',PY:'Paraguay',UY:'Uruguay',GT:'Guatemala',HN:'Honduras',SV:'El Salvador',
+  CR:'Costa Rica',PA:'Panamá',NI:'Nicaragua',
+};
+
+// Extend COUNTRY_COORDS with more countries for globe markers
+Object.assign(COUNTRY_COORDS, {
+  JM:[18,-77],IT:[42,12],PT:[39,-8],DK:[56,10],FI:[64,26],IE:[53,-8],
+  RU:[60,100],PL:[52,20],CZ:[50,15],AT:[47,14],CH:[47,8],
+  NG:[9,8],GH:[8,-2],ZA:[-29,25],KE:[1,38],
+  IN:[20,77],CN:[35,105],TW:[24,121],ID:[-5,120],PH:[13,122],
+  BO:[-17,-65],PY:[-23,-58],UY:[-33,-56],GT:[15,-90],HN:[15,-87],
+  SV:[14,-89],CR:[10,-84],PA:[9,-80],NI:[13,-85],
+});
+
+// Country lat/lon centers for globe markers
+const COUNTRY_COORDS = {
+  US:[37,-95],GB:[52,-1],CA:[56,-106],MX:[23,-102],PR:[18,-66],
+  CO:[4,-74],AR:[-34,-64],BR:[-14,-51],CL:[-30,-71],ES:[40,-3],
+  FR:[46,2],DE:[51,10],SE:[62,15],NO:[65,13],NL:[52,5],BE:[50,4],
+  KR:[37,127],JP:[36,138],AU:[-25,134],CU:[22,-80],BB:[13,-59],
+  TT:[11,-61],PE:[-9,-75],DO:[19,-70],VE:[8,-66],EC:[-1,-78],
+};
+
+let globeInitialized = false;
+let globeScene, globeCamera, globeRenderer, globeSphere, globeAnimId;
+let isDragging = false, prevMouse = {x:0,y:0};
+let globeRotY = 0, globeRotX = 0.3;
+let countryMeshes = {}; // code -> mesh
+let hoveredCountry = null;
+
+// Cache MusicBrainz results to avoid re-fetching
+const _mbCache = {};
+
+async function lookupArtistCountryMB(artistName) {
+  if (_mbCache[artistName] !== undefined) return _mbCache[artistName];
+  try {
+    const q = encodeURIComponent(artistName);
+    const res = await fetch(
+      `https://musicbrainz.org/ws/2/artist/?query=artist:${q}&fmt=json&limit=3`,
+      { headers: { 'User-Agent': 'SpotifyDashboard/1.0 (github.com/fedlui)' } }
+    );
+    if (!res.ok) { _mbCache[artistName] = null; return null; }
+    const data = await res.json();
+    const artists = data.artists || [];
+    // Find best match: name similarity + has country
+    for (const a of artists) {
+      if (!a.country && !a.area?.name) continue;
+      const nameLower = a.name.toLowerCase();
+      const queryLower = artistName.toLowerCase();
+      if (nameLower === queryLower || nameLower.includes(queryLower) || queryLower.includes(nameLower)) {
+        const country = a.country || mbAreaToCode(a.area?.name || '');
+        _mbCache[artistName] = country || null;
+        return _mbCache[artistName];
+      }
+    }
+    // Fallback: take first result with country
+    const first = artists.find(a => a.country || a.area?.name);
+    if (first) {
+      const country = first.country || mbAreaToCode(first.area?.name || '');
+      _mbCache[artistName] = country || null;
+      return _mbCache[artistName];
+    }
+    _mbCache[artistName] = null;
+    return null;
+  } catch(e) { _mbCache[artistName] = null; return null; }
+}
+
+function mbAreaToCode(areaName) {
+  const map = {
+    'United States':'US','United Kingdom':'GB','Canada':'CA','Mexico':'MX',
+    'Puerto Rico':'PR','Colombia':'CO','Argentina':'AR','Brazil':'BR','Chile':'CL',
+    'Spain':'ES','France':'FR','Germany':'DE','Sweden':'SE','Norway':'NO',
+    'Netherlands':'NL','Belgium':'BE','South Korea':'KR','Japan':'JP','Australia':'AU',
+    'Cuba':'CU','Jamaica':'JM','Trinidad and Tobago':'TT','Venezuela':'VE',
+    'Peru':'PE','Dominican Republic':'DO','Ecuador':'EC','Bolivia':'BO',
+    'Italy':'IT','Portugal':'PT','Denmark':'DK','Finland':'FI','Ireland':'IE',
+    'Russia':'RU','Poland':'PL','Czech Republic':'CZ','Austria':'AT','Switzerland':'CH',
+    'Nigeria':'NG','Ghana':'GH','South Africa':'ZA','Kenya':'KE',
+    'India':'IN','China':'CN','Taiwan':'TW','Indonesia':'ID','Philippines':'PH',
+  };
+  return map[areaName] || null;
+}
+
+// Sleep helper for rate limiting
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function renderMap() {
+  if (window._globeBuilt) return;  window._globeBuilt = true;
+
+  // Build country data from ALL 200 tracks
+  const countryTracks = {};
+  tracksData.forEach(t => {
+    t.artists.forEach(a => {
+      const country = ARTIST_COUNTRIES[a.name] || _mbCache[a.name];
+      if (country) {
+        if (!countryTracks[country]) countryTracks[country] = [];
+        if (!countryTracks[country].find(x=>x.id===t.id)) countryTracks[country].push(t);
+      }
+    });
+  });
+
+  const sorted = Object.entries(countryTracks).sort((a,b)=>b[1].length-a[1].length);
+
+  // Unknown artists grouped with their tracks
+  const unknownMap = {};
+  tracksData.forEach(t => {
+    t.artists.forEach(a => {
+      const known = ARTIST_COUNTRIES[a.name] || _mbCache[a.name];
+      if (!known) {
+        if (!unknownMap[a.name]) unknownMap[a.name] = [];
+        if (!unknownMap[a.name].find(x=>x.id===t.id)) unknownMap[a.name].push(t);
+      }
+    });
+  });
+  const unknownEntries = Object.entries(unknownMap).sort((a,b)=>b[1].length-a[1].length);
+
+  // Year range for slider
+  const years = tracksData.map(t=>parseInt(t.album?.release_date?.split('-')[0])).filter(Boolean);
+  const minYear = Math.min(...years)||1960;
+  const maxYear = Math.max(...years)||2024;
+
+  document.getElementById('map-content').innerHTML = `
+    <div style="margin-bottom:1rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.25rem;">🌍 Globo de orígenes</h2>
+      <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Arrastra el globo · Pasa el cursor sobre un punto para ver tus canciones</p>
+      <div id="mb-lookup-status" style="margin-top:.4rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--green);transition:opacity 1s;"></div>
+      <div id="globe-country-count" style="margin-top:.2rem;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);"></div>
+    </div>
+
+    <!-- Year range slider -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem 1.5rem;margin-bottom:1.25rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+        <span style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);">📅 Filtrar por año de lanzamiento</span>
+        <span id="year-range-label" style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--green);">${minYear} — ${maxYear}</span>
+      </div>
+      <div style="position:relative;height:28px;display:flex;align-items:center;">
+        <div style="position:absolute;left:0;right:0;height:4px;background:var(--border);border-radius:2px;"></div>
+        <div id="year-track-fill" style="position:absolute;left:0;right:0;height:4px;background:var(--green);border-radius:2px;transform-origin:left;"></div>
+        <input type="range" id="year-min" min="${minYear}" max="${maxYear}" value="${minYear}" step="1"
+          style="position:absolute;width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:4px;pointer-events:none;"
+          oninput="updateYearFilter()">
+        <input type="range" id="year-max" min="${minYear}" max="${maxYear}" value="${maxYear}" step="1"
+          style="position:absolute;width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:4px;pointer-events:none;"
+          oninput="updateYearFilter()">
+      </div>
+      <style>
+        #year-min::-webkit-slider-thumb, #year-max::-webkit-slider-thumb {
+          -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+          background:var(--green); border:2px solid #060810; cursor:pointer;
+          pointer-events:all; box-shadow:0 0 8px rgba(29,185,84,.5);
+        }
+        #year-min::-moz-range-thumb, #year-max::-moz-range-thumb {
+          width:18px; height:18px; border-radius:50%; background:var(--green);
+          border:2px solid #060810; cursor:pointer; pointer-events:all;
+        }
+      </style>
+    </div>
+
+    <!-- Globe + card -->
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:1.5rem;align-items:start;">
+      <div style="position:relative;">
+        <canvas id="globe-canvas" style="width:100%;border-radius:16px;background:transparent;cursor:grab;display:block;"></canvas>
+        <div id="globe-tooltip" style="position:absolute;top:1rem;left:1rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);background:rgba(6,8,16,.85);padding:.4rem .875rem;border-radius:8px;border:1px solid var(--border);pointer-events:none;transition:opacity .2s;">Arrastra para girar</div>
+      </div>
+      <div id="country-card" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.25rem;min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <div style="font-size:3rem;margin-bottom:.5rem;">🌐</div>
+        <div style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:center;">Pasa el cursor<br>sobre un marcador</div>
+      </div>
+    </div>
+
+    <!-- Country chips -->
+    <div style="margin-top:1.5rem;">
+      <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Países identificados</p>
+      <div id="country-chips" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        ${sorted.map(([code,tracks])=>`
+          <div onclick="highlightCountryByCode('${code}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+            ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${tracks.length}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Unknown collapsible -->
+    ${unknownEntries.length ? `
+    <div style="margin-top:1.25rem;">
+      <button onclick="toggleUnknown()" style="display:flex;align-items:center;gap:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem 1.25rem;cursor:pointer;width:100%;text-align:left;color:var(--text);font-family:'Syne',sans-serif;font-size:.85rem;font-weight:600;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--yellow)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:1rem;">⚠️</span>
+        <span>${unknownEntries.length} artistas sin país identificado</span>
+        <span id="unknown-arrow" style="margin-left:auto;color:var(--muted);transition:transform .3s;">▼</span>
+      </button>
+      <div id="unknown-list" style="display:none;margin-top:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        ${unknownEntries.map(([artist, tracks])=>`
+          <div id="unknown-row-${escHtml(artist.replace(/[^a-zA-Z0-9]/g,'_'))}" style="display:flex;align-items:center;gap:1rem;padding:.75rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.04);transition:opacity .5s;">
+            <div style="font-size:.85rem;font-weight:600;flex:1;">${escHtml(artist)}</div>
+            <div style="font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${tracks.length} canción${tracks.length>1?'es':''}</div>
+            <div style="display:flex;gap:.4rem;">
+              ${tracks.slice(0,3).map(t=>t.album?.images?.[2]?.url?`<img src="${t.album.images[2].url}" style="width:28px;height:28px;border-radius:4px;object-fit:cover;" title="${escHtml(t.name)}">`:'').join('')}
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  window._globeCountryTracks = countryTracks;
+  window._globeSorted = sorted;
+  window._globeMinYear = minYear;
+  window._globeMaxYear = maxYear;
+  window._globeAllCountryTracks = JSON.parse(JSON.stringify(
+    Object.fromEntries(Object.entries(countryTracks).map(([k,v])=>[k,v.map(t=>({id:t.id,year:parseInt(t.album?.release_date?.split('-')[0])||0}))]))
+  ));
+
+  // Show how many countries found
+  const countEl = document.getElementById('globe-country-count');
+  if (countEl) countEl.textContent = sorted.length > 0
+    ? `${sorted.length} países identificados de ${tracksData.length} canciones`
+    : '⚠️ No se identificaron países — revisa la consola (F12)';
+
+  initGlobe(countryTracks, sorted);
+  updateYearFill();
+
+  // Lookup unknown artists in MusicBrainz in background
+  if (unknownEntries.length > 0) {
+    lookupUnknownArtistsMB(unknownEntries);
+  }
+}
+
+async function lookupUnknownArtistsMB(unknownEntries) {
+  const statusEl = document.getElementById('mb-lookup-status');
+  let found = 0;
+
+  // Process in batches of 3, with 350ms delay between each (MusicBrainz rate limit = 1/sec)
+  for (let i = 0; i < unknownEntries.length; i++) {
+    const [artistName, tracks] = unknownEntries[i];
+    if (i > 0 && i % 3 === 0) await sleep(1100); // rate limit
+    else if (i > 0) await sleep(350);
+
+    const country = await lookupArtistCountryMB(artistName);
+    if (!country) continue;
+
+    found++;
+    // Add to ARTIST_COUNTRIES so future runs use it
+    ARTIST_COUNTRIES[artistName] = country;
+
+    // Update countryTracks
+    if (!window._globeCountryTracks) continue;
+    if (!window._globeCountryTracks[country]) window._globeCountryTracks[country] = [];
+    tracks.forEach(t => {
+      if (!window._globeCountryTracks[country].find(x=>x.id===t.id))
+        window._globeCountryTracks[country].push(t);
+    });
+
+    // Update the globe markers
+    const sortedNew = Object.entries(window._globeCountryTracks).sort((a,b)=>b[1].length-a[1].length);
+    updateGlobeMarkers(window._globeCountryTracks);
+
+    // Update chips
+    const chips = document.getElementById('country-chips');
+    if (chips) {
+      chips.innerHTML = sortedNew.map(([code,trs])=>`
+        <div onclick="highlightCountryByCode('${code}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${trs.length}</span>
+        </div>`).join('');
+    }
+
+    // Update status
+    if (statusEl) statusEl.textContent = `🔍 Buscando países... ${i+1}/${unknownEntries.length} (${found} encontrados)`;
+
+    // Remove from unknown list if found
+    const row = document.getElementById(`unknown-row-${CSS.escape(artistName)}`);
+    if (row) row.style.opacity = '0.3';
+  }
+
+  if (statusEl) {
+    statusEl.textContent = found > 0
+      ? `✅ MusicBrainz: ${found} artistas nuevos identificados`
+      : `ℹ️ No se encontraron países adicionales`;
+    setTimeout(() => { if(statusEl) statusEl.style.opacity='0'; }, 4000);
+  }
+}
+
+function toggleUnknown() {
+  const list = document.getElementById('unknown-list');
+  const arrow = document.getElementById('unknown-arrow');
+  if (!list) return;
+  const open = list.style.display === 'block';
+  list.style.display = open ? 'none' : 'block';
+  arrow.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function updateYearFilter() {
+  const minEl = document.getElementById('year-min');
+  const maxEl = document.getElementById('year-max');
+  if (!minEl || !maxEl) return;
+  let minV = parseInt(minEl.value), maxV = parseInt(maxEl.value);
+  if (minV > maxV) { [minV, maxV] = [maxV, minV]; }
+  document.getElementById('year-range-label').textContent = `${minV} — ${maxV}`;
+  updateYearFill();
+
+  // Re-filter countryTracks based on year
+  const base = window._globeAllCountryTracks;
+  if (!base) return;
+  const filtered = {};
+  Object.entries(base).forEach(([code, items]) => {
+    const f = items.filter(i => i.year >= minV && i.year <= maxV);
+    if (f.length > 0) {
+      filtered[code] = f.map(i => tracksData.find(t=>t.id===i.id)).filter(Boolean);
+    }
+  });
+  window._globeCountryTracks = filtered;
+  updateGlobeMarkers(filtered);
+}
+
+function updateYearFill() {
+  const minEl = document.getElementById('year-min');
+  const maxEl = document.getElementById('year-max');
+  const fill = document.getElementById('year-track-fill');
+  if (!minEl||!maxEl||!fill) return;
+  const min = parseInt(minEl.min), max = parseInt(minEl.max);
+  const vMin = parseInt(minEl.value), vMax = parseInt(maxEl.value);
+  const pMin = (Math.min(vMin,vMax)-min)/(max-min)*100;
+  const pMax = (Math.max(vMin,vMax)-min)/(max-min)*100;
+  fill.style.left = pMin+'%';
+  fill.style.width = (pMax-pMin)+'%';
+}
+
+function initGlobe(countryTracks, sorted) {
+  if (typeof THREE === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload = () => buildGlobe(countryTracks, sorted);
+    document.head.appendChild(s);
+  } else {
+    buildGlobe(countryTracks, sorted);
+  }
+}
+
+let _globeGroup = null;
+let _markerMeshes = []; // {mesh, code, tracks}
+
+function buildGlobe(countryTracks, sorted) {
+  console.log('[Globe] buildGlobe called, sorted countries:', sorted.length, sorted.map(s=>s[0]));
+  const canvas = document.getElementById('globe-canvas');
+  if (!canvas) { console.error('[Globe] canvas not found!'); return; }
+  const W = canvas.parentElement.clientWidth;
+  const H = Math.min(W * 0.75, 520);
+  canvas.width = W;
+  canvas.height = H;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, W/H, 0.1, 1000);
+  camera.position.z = 2.7;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setClearColor(0x000000, 0);
+  window._globeRenderer = renderer;
+  window._globeScene = scene;
+  window._globeCamera = camera;
+
+  // Stars background
+  const sv = [];
+  for (let i=0;i<2000;i++) sv.push((Math.random()-.5)*200,(Math.random()-.5)*200,(Math.random()-.5)*200);
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sv,3));
+  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0xffffff,size:.1,transparent:true,opacity:.45})));
+
+  const globeGroup = new THREE.Group();
+  scene.add(globeGroup);
+  _globeGroup = globeGroup;
+  globeGroup.rotation.y = -0.5;
+
+  // Ocean
+  const oceanMat = new THREE.MeshPhongMaterial({color:0x071d3a,emissive:0x030d1a,specular:0x1DB954,shininess:25});
+  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1,64,64), oceanMat));
+
+  // Subtle lat/lon grid
+  const wMat = new THREE.MeshBasicMaterial({color:0x1DB954,wireframe:true,transparent:true,opacity:0.035});
+  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.001,18,18), wMat));
+
+  // Thin atmosphere rim
+  const atmMat = new THREE.MeshPhongMaterial({color:0x38bdf8,transparent:true,opacity:0.04,side:THREE.BackSide});
+  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.07,48,48), atmMat));
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+  const dl = new THREE.DirectionalLight(0xaaffcc, 1.1);
+  dl.position.set(4,2,3); scene.add(dl);
+
+  // Helper: lat/lon -> 3D position on sphere surface
+  function ll2v(lat,lon,r=1.012) {
+    const phi=(90-lat)*Math.PI/180, th=(lon+180)*Math.PI/180;
+    return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(th));
+  }
+
+  _markerMeshes = [];
+  const maxCount = sorted[0]?.[1]?.length||1;
+  const COLORS = [0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0x34d399,0x818cf8,0xfb923c];
+
+  sorted.forEach(([code,tracks],idx) => {
+    const coords = COUNTRY_COORDS[code];
+    if (!coords) return;
+    const pos = ll2v(coords[0], coords[1]);
+    const norm = pos.clone().normalize();
+    const col = COLORS[idx % COLORS.length];
+    const sz = 0.013 + (tracks.length/maxCount)*0.018; // small dot, scales with count
+
+    // Main glowing dot
+    const dotGeo = new THREE.SphereGeometry(sz, 12, 12);
+    const dotMat = new THREE.MeshBasicMaterial({color: col});
+    const dot = new THREE.Mesh(dotGeo, dotMat);
+    dot.position.copy(pos);
+    dot._cc = code; dot._tr = tracks;
+    globeGroup.add(dot);
+    _markerMeshes.push({mesh:dot, code, tracks, baseColor:col, baseSize:sz});
+
+    // Thin halo ring (tight, not intrusive)
+    const haloR = sz * 2.2;
+    const haloGeo = new THREE.RingGeometry(haloR, haloR*1.25, 32);
+    const haloMat = new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.5,side:THREE.DoubleSide});
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.copy(pos);
+    halo.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), norm);
+    halo._cc = code; halo._tr = tracks;
+    globeGroup.add(halo);
+    _markerMeshes.push({mesh:halo, code, tracks, isHalo:true, baseColor:col});
+  });
+
+  // Raycaster
+  const raycaster = new THREE.Raycaster();
+  raycaster.params.Mesh = {threshold:0.02};
+  const mouse = new THREE.Vector2(-999,-999);
+  const allMeshes = _markerMeshes.map(m=>m.mesh);
+
+  let animId;
+  const animate = () => {
+    animId = requestAnimationFrame(animate);
+    const t = Date.now()*0.0018;
+    // Pulse halos
+    _markerMeshes.forEach((m,i)=>{
+      if (m.isHalo) {
+        const p = 1 + Math.sin(t + i*0.9)*0.18;
+        m.mesh.scale.setScalar(p);
+        m.mesh.material.opacity = 0.35 + Math.sin(t+i*0.9)*0.15;
+      }
+    });
+    // Hover — use recursive:true so it finds children inside the group
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(allMeshes, false);
+    if (hits.length) {
+      const obj = hits[0].object;
+      const code = obj._cc;
+      if (code) {
+        if (code !== hoveredCountry) {
+          hoveredCountry = code;
+          showCountryCard(code, obj._tr);
+          const tt = document.getElementById('globe-tooltip');
+          if (tt) tt.textContent = (COUNTRY_FLAGS[code]||'') + ' ' + (COUNTRY_NAMES[code]||code);
+        }
+      }
+    } else {
+      // Reset so re-hovering same country works after moving away
+      hoveredCountry = null;
+    }
+    renderer.render(scene, camera);
+  };
+  animate();
+
+  // Drag to rotate (manual only — no auto spin)
+  let dragging=false, px={x:0,y:0};
+  canvas.addEventListener('mousedown', e=>{ dragging=true; px={x:e.clientX,y:e.clientY}; canvas.style.cursor='grabbing'; });
+  window.addEventListener('mouseup', ()=>{ dragging=false; if(canvas) canvas.style.cursor='grab'; });
+  window.addEventListener('mousemove', e=>{
+    // Always update mouse for hover detection
+    const rect = canvas.getBoundingClientRect();
+    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+      mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
+      mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
+    } else {
+      mouse.set(-999,-999);
+    }
+    if (!dragging) return;
+    globeGroup.rotation.y += (e.clientX-px.x)*0.007;
+    globeGroup.rotation.x = Math.max(-1.2,Math.min(1.2, globeGroup.rotation.x+(e.clientY-px.y)*0.007));
+    px={x:e.clientX,y:e.clientY};
+  });
+  // mouse reset handled in mousemove bounds check
+  canvas.addEventListener('touchstart',e=>{ dragging=true; px={x:e.touches[0].clientX,y:e.touches[0].clientY}; },{passive:true});
+  canvas.addEventListener('touchend',()=>dragging=false,{passive:true});
+  canvas.addEventListener('touchmove',e=>{
+    if(!dragging) return;
+    globeGroup.rotation.y+=(e.touches[0].clientX-px.x)*0.007;
+    globeGroup.rotation.x=Math.max(-1.2,Math.min(1.2,globeGroup.rotation.x+(e.touches[0].clientY-px.y)*0.007));
+    px={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  },{passive:true});
+}
+
+function updateGlobeMarkers(filteredCountryTracks) {
+  if (!_globeGroup || !_markerMeshes.length) return;
+  const sorted = Object.entries(filteredCountryTracks).sort((a,b)=>b[1].length-a[1].length);
+  const maxCount = sorted[0]?.[1]?.length||1;
+  const COLORS = [0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0x34d399,0x818cf8,0xfb923c];
+  const sortedIdx = Object.fromEntries(sorted.map(([c],i)=>[c,i]));
+
+  _markerMeshes.forEach(m => {
+    const ft = filteredCountryTracks[m.code];
+    if (!ft || ft.length===0) {
+      m.mesh.material.opacity = 0;
+      m.mesh.scale.setScalar(0.01);
+    } else {
+      const idx = sortedIdx[m.code]??8;
+      const col = COLORS[idx%COLORS.length];
+      m.mesh.material.color?.setHex(col);
+      m.mesh.scale.setScalar(1);
+      if (!m.isHalo) m.mesh.material.opacity = 1;
+      m.mesh._tr = ft;
+    }
+  });
+}
+
+function showCountryCard(code, tracks) {
+  const flag = COUNTRY_FLAGS[code]||'🌐';
+  const name = COUNTRY_NAMES[code]||code;
+  const artists = [...new Set(tracks.map(t=>t.artists[0]?.name))].slice(0,4);
+  const topTrack = tracks[0];
+  const cover = topTrack?.album?.images?.[1]?.url||topTrack?.album?.images?.[0]?.url;
+  const listeners = topTrack ? (topTrack._listeners?formatNum(topTrack._listeners):formatNum(Math.round(1000*Math.exp((topTrack.popularity||0)*0.115)))) : '—';
+  const yr = topTrack?.album?.release_date?.split('-')[0]||'—';
+
+  document.getElementById('country-card').innerHTML = `
+    <div style="width:100%;">
+      <div style="
+        background:linear-gradient(145deg,#111827 0%,#0d1117 60%,#0f2318 100%);
+        border:2px solid var(--green);
+        border-radius:18px;
+        padding:1.25rem;
+        position:relative;
+        overflow:hidden;
+        box-shadow:0 0 40px rgba(29,185,84,.25),inset 0 0 40px rgba(29,185,84,.04);
+      ">
+        <div style="position:absolute;top:-60%;left:-60%;width:220%;height:220%;background:conic-gradient(transparent 20%,rgba(29,185,84,.04) 50%,transparent 80%);animation:spin-slow 8s linear infinite;pointer-events:none;"></div>
+        <style>@keyframes spin-slow{to{transform:rotate(360deg)}}</style>
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <div style="font-size:2.8rem;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5))">${flag}</div>
+          <div style="text-align:right;">
+            <div style="font-size:.6rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--green);margin-bottom:.2rem;">ORIGEN MUSICAL</div>
+            <div style="font-size:1.1rem;font-weight:800;letter-spacing:-.03em;">${name}</div>
+            <div style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${tracks.length} canción${tracks.length>1?'es':''}</div>
+          </div>
+        </div>
+
+        <!-- Cover -->
+        ${cover?`
+          <div style="border-radius:12px;overflow:hidden;margin-bottom:1rem;border:1px solid rgba(29,185,84,.25);box-shadow:0 4px 20px rgba(0,0,0,.4)">
+            <img src="${cover}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
+          </div>`:`
+          <div style="height:140px;background:var(--green-dim);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;margin-bottom:1rem;">🎵</div>`}
+
+        <!-- Track name -->
+        <div style="font-size:.98rem;font-weight:800;letter-spacing:-.02em;margin-bottom:.2rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(topTrack?.name||'—')}</div>
+        <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:1rem;">${escHtml(topTrack?.artists?.[0]?.name||'—')} · ${yr}</div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:1rem;">
+          ${[['🎵',tracks.length,'canciones'],['👥',listeners,'oyentes'],['🥁',topTrack?._audio?.bpm||'—','BPM']].map(([ic,v,l])=>`
+            <div style="background:rgba(29,185,84,.08);border:1px solid rgba(29,185,84,.18);border-radius:10px;padding:.5rem;text-align:center;">
+              <div style="font-size:.9rem;">${ic}</div>
+              <div style="font-size:.88rem;font-weight:800;color:var(--green);line-height:1.1;">${v}</div>
+              <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">${l}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Artists -->
+        <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:.75rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);line-height:1.6;">
+          🎤 ${artists.map(a=>escHtml(a)).join(' · ')}${tracks.length>4?` <span style="color:var(--green)">+${tracks.length-4} más</span>`:''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function highlightCountryByCode(code) {
+  if (!window._globeCountryTracks) return;
+  const tracks = window._globeCountryTracks[code];
+  if (tracks) { hoveredCountry=code; showCountryCard(code, tracks); }
+}
+
+// ===== SESSION IDEAL =====
+function renderSession() {
+  if (sessionRendered) return;
+  sessionRendered = true;
+  buildSession('workout');
+}
+
+function buildSession(mode) {
+  document.querySelectorAll('.session-mode-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.session-mode-btn[data-mode="${mode}"]`);
+  if (btn) btn.classList.add('active');
+
+  const tracks = [...tracksData].filter(t => t._audio?.bpm);
+
+  let sorted;
+  if (mode === 'workout') {
+    // De más lenta a más rápida — warm up → peak
+    sorted = tracks.sort((a,b) => a._audio.bpm - b._audio.bpm);
+  } else if (mode === 'relax') {
+    // De más rápida a más lenta — bajar el ritmo
+    sorted = tracks.sort((a,b) => b._audio.bpm - a._audio.bpm);
+  } else if (mode === 'focus') {
+    // BPM medio (60-100), estables — buenas para concentrarse
+    sorted = tracks.filter(t => t._audio.bpm >= 60 && t._audio.bpm <= 110).sort((a,b) => a._audio.bpm - b._audio.bpm);
+  } else if (mode === 'party') {
+    // Las más rápidas primero
+    sorted = tracks.filter(t => t._audio.bpm >= 110).sort((a,b) => b._audio.bpm - a._audio.bpm);
+  }
+
+  const top20 = (sorted||[]).slice(0, 20);
+  const totalMin = Math.round(top20.reduce((s,t)=>s+t.duration_ms,0)/60000);
+
+  const modeLabels = { workout:'🏋️ Workout', relax:'😌 Relajarse', focus:'🧠 Concentración', party:'🎉 Fiesta' };
+  const modeDesc = {
+    workout:'De más lenta a más rápida — perfecta para calentar y llegar al pico',
+    relax:'Empieza rápido y va bajando el ritmo para relajarte',
+    focus:'BPM moderado (60-110) — música que no distrae pero acompaña',
+    party:'Las más energéticas primero para que la fiesta no pare',
+  };
+
+  document.getElementById('session-content').innerHTML = `
+    <div style="margin-bottom:1.5rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">🕐 Tu Sesión Ideal</h2>
+      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Playlist ordenada automáticamente según el mood</p>
+    </div>
+    <div class="session-modes">
+      ${['workout','relax','focus','party'].map(m=>`
+        <button class="session-mode-btn ${m===mode?'active':''}" data-mode="${m}" onclick="buildSession('${m}')">${modeLabels[m]}</button>
+      `).join('')}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;">
+      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">${modeDesc[mode]}</p>
+      <p style="font-size:.78rem;color:var(--green);font-family:'JetBrains Mono',monospace;margin-top:.5rem;">⏱ ${totalMin} min · ${top20.length} canciones</p>
+    </div>
+    ${top20.length === 0 ? '<div class="error-box">No hay suficientes canciones con BPM para este modo.</div>' : ''}
+    <div class="session-list">
+      ${top20.map((t,i) => {
+        const cover = t.album?.images?.[2]?.url||t.album?.images?.[0]?.url;
+        const mins = Math.floor(t.duration_ms/60000);
+        const secs = Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
+        return `<div class="session-track">
+          <span class="session-num">${i+1}</span>
+          ${cover?`<img class="session-cover" src="${cover}" alt="">`:`<div class="session-cover-ph">♪</div>`}
+          <div class="session-info">
+            <div class="session-name">${escHtml(t.name)}</div>
+            <div class="session-sub">${escHtml(t.artists[0]?.name||'')} · ${mins}:${secs}</div>
+          </div>
+          <span class="session-bpm">${t._audio.bpm} BPM</span>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ===== PALETTE =====
+function renderPalette() {
+  if (paletteRendered) return;
+  paletteRendered = true;
+
+  const covers = tracksData.slice(0,20).map(t => t.album?.images?.[0]?.url).filter(Boolean);
+
+  // Generate color palette from cover art hues using canvas
+  const colors = generatePaletteColors(tracksData.slice(0,40));
+
+  const container = document.getElementById('palette-content');
+  container.innerHTML = `
+    <div style="margin-bottom:1.5rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">🎨 Paleta de tu música</h2>
+      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Los colores que definen tu gusto musical</p>
+    </div>
+    <div class="palette-hero">
+      ${colors.map((c,i) => `
+        <div class="palette-swatch" style="background:${c.hex}">
+          <div class="palette-swatch-label">${c.hex}</div>
+        </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem;">
+      ${colors.map(c=>`
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <div style="width:24px;height:24px;border-radius:50%;background:${c.hex};border:2px solid rgba(255,255,255,.1)"></div>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--muted)">${c.hex} · ${c.label}</span>
+        </div>`).join('')}
+    </div>
+    <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Portadas de tus canciones</p>
+    <div class="palette-albums">
+      ${tracksData.slice(0,30).filter(t=>t.album?.images?.[1]?.url).map(t=>`
+        <div class="palette-album" title="${escHtml(t.name)}">
+          <img src="${t.album.images[1].url}" alt="${escHtml(t.name)}" loading="lazy">
+        </div>`).join('')}
+    </div>
+  `;
+}
+
+function generatePaletteColors(tracks) {
+  // Derive a unique palette based on track names/artists as a seed (deterministic)
+  const seed = tracks.map(t=>t.id).join('').split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  const rand = (n) => { let x = Math.sin(seed + n) * 10000; return x - Math.floor(x); };
+
+  // Generate 8 colors in HSL distributed across hue spectrum
+  const palette = [];
+  const hues = [0,30,60,120,180,210,270,320];
+  const colorLabels = ['Rojo','Naranja','Amarillo','Verde','Cyan','Azul','Morado','Rosa'];
+
+  hues.forEach((baseHue, i) => {
+    const hue = Math.round(baseHue + rand(i*7) * 30 - 15);
+    const sat = Math.round(50 + rand(i*13) * 40);
+    const lit = Math.round(40 + rand(i*17) * 25);
+    const h = ((hue % 360) + 360) % 360;
+    // Convert HSL to hex
+    const hex = hslToHex(h, sat, lit);
+    palette.push({ hex, label: colorLabels[i] });
+  });
+  return palette;
+}
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1-l);
+  const f = n => { const k = (n+h/30)%12; const c = l-a*Math.max(-1,Math.min(k-3,9-k,1)); return Math.round(255*c).toString(16).padStart(2,'0'); };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// ===== TIMELINE / DECADES =====
+function renderTimeline() {
+  if (timelineRendered) return;
+  timelineRendered = true;
+
+  const byDecade = {};
+  tracksData.forEach(t => {
+    const yr = parseInt(t.album?.release_date?.split('-')[0]);
+    if (!yr) return;
+    const dec = Math.floor(yr/10)*10;
+    if (!byDecade[dec]) byDecade[dec] = [];
+    byDecade[dec].push(t);
+  });
+
+  const sorted = Object.entries(byDecade).sort((a,b)=>b[0]-a[0]);
+
+  const decadeColors = {
+    2020:'var(--green)',2010:'var(--accent2)',2000:'var(--accent)',
+    1990:'var(--yellow)',1980:'var(--red)',1970:'#f97316',
+  };
+
+  document.getElementById('timeline-content').innerHTML = `
+    <div style="margin-bottom:1.5rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">📅 Máquina del tiempo</h2>
+      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Tu música organizada por décadas</p>
+    </div>
+    ${sorted.map(([dec, tracks]) => {
+      const genres = [...new Set(tracks.flatMap(t=>t._genres||[]))].slice(0,4);
+      const avgListeners = Math.round(tracks.reduce((s,t)=>s+(t._listeners||Math.round(1000*Math.exp((t.popularity||0)*0.115))),0)/tracks.length);
+      const color = decadeColors[dec]||'var(--muted)';
+      return `
+      <div class="timeline-decade">
+        <div class="timeline-decade-header" style="border-left-color:${color}">
+          <div class="timeline-decade-year" style="color:${color}">${dec}s</div>
+          <div>
+            <div style="font-size:.88rem;font-weight:700">${tracks.length} canciones tuyas de esta época</div>
+            <div class="timeline-decade-stats">${genres.join(' · ')||'—'} · avg ${formatNum(avgListeners)} oyentes</div>
+          </div>
+        </div>
+        <div class="timeline-tracks">
+          ${tracks.map(t => {
+            const cover = t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
+            return `<div class="timeline-card">
+              ${cover?`<img class="timeline-cover" src="${cover}" alt="" loading="lazy">`:`<div class="timeline-cover-ph" style="color:${color}">♪</div>`}
+              <div style="min-width:0">
+                <div class="timeline-name">${escHtml(t.name)}</div>
+                <div class="timeline-artist">${escHtml(t.artists[0]?.name||'')} · ${t.album?.release_date?.split('-')[0]||'—'}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+// ===== RECORDS =====
+function renderRecords() {
+  if (recordsRendered) return;
+  recordsRendered = true;
+
+  if (!tracksData.length) return;
+
+  const withListeners = tracksData.map(t => ({
+    ...t, _estimatedListeners: t._listeners || Math.round(1000 * Math.exp((t.popularity||0) * 0.115))
+  }));
+
+  const longest = [...withListeners].sort((a,b)=>b.duration_ms-a.duration_ms)[0];
+  const shortest = [...withListeners].sort((a,b)=>a.duration_ms-b.duration_ms)[0];
+  const fastest = [...withListeners].filter(t=>t._audio?.bpm).sort((a,b)=>b._audio.bpm-a._audio.bpm)[0];
+  const slowest = [...withListeners].filter(t=>t._audio?.bpm).sort((a,b)=>a._audio.bpm-b._audio.bpm)[0];
+  const oldest = [...withListeners].filter(t=>t.album?.release_date).sort((a,b)=>a.album.release_date.localeCompare(b.album.release_date))[0];
+  const newest = [...withListeners].filter(t=>t.album?.release_date).sort((a,b)=>b.album.release_date.localeCompare(a.album.release_date))[0];
+  const mostListened = [...withListeners].sort((a,b)=>b._estimatedListeners-a._estimatedListeners)[0];
+  const leastListened = [...withListeners].sort((a,b)=>a._estimatedListeners-b._estimatedListeners)[0];
+
+  // Top artist
+  const artistCount = {};
+  tracksData.forEach(t=>t.artists.forEach(a=>{artistCount[a.name]=(artistCount[a.name]||0)+1;}));
+  const topArtist = Object.entries(artistCount).sort((a,b)=>b[1]-a[1])[0];
+
+  // Most unique: lowest listeners + deepest rank
+  const mostUnique = [...withListeners].sort((a,b)=>a._estimatedListeners-b._estimatedListeners)[0];
+
+  const fmt = (ms) => { const m=Math.floor(ms/60000); const s=Math.floor((ms%60000)/1000).toString().padStart(2,'0'); return `${m}:${s}`; };
+  const cover = (t) => t?.album?.images?.[2]?.url||t?.album?.images?.[0]?.url;
+
+  const records = [
+    { icon:'⏳', label:'Canción más larga', value:fmt(longest?.duration_ms||0), sub:escHtml(longest?.name||'—'), img:cover(longest) },
+    { icon:'⚡', label:'Canción más corta', value:fmt(shortest?.duration_ms||0), sub:escHtml(shortest?.name||'—'), img:cover(shortest) },
+    { icon:'🚀', label:'BPM más alto', value:`${fastest?._audio?.bpm||'—'} BPM`, sub:escHtml(fastest?.name||'—'), img:cover(fastest) },
+    { icon:'🧘', label:'BPM más bajo', value:`${slowest?._audio?.bpm||'—'} BPM`, sub:escHtml(slowest?.name||'—'), img:cover(slowest) },
+    { icon:'🕰️', label:'Canción más antigua', value:oldest?.album?.release_date?.split('-')[0]||'—', sub:escHtml(oldest?.name||'—'), img:cover(oldest) },
+    { icon:'🆕', label:'Canción más reciente', value:newest?.album?.release_date?.split('-')[0]||'—', sub:escHtml(newest?.name||'—'), img:cover(newest) },
+    { icon:'🔥', label:'Más oyentes globales', value:formatNum(mostListened?._estimatedListeners||0), sub:escHtml(mostListened?.name||'—'), img:cover(mostListened) },
+    { icon:'💎', label:'Menos oyentes (tu joya)', value:formatNum(leastListened?._estimatedListeners||0), sub:escHtml(leastListened?.name||'—'), img:cover(leastListened) },
+    { icon:'🎤', label:'Tu artista favorito', value:escHtml(topArtist?.[0]||'—'), sub:`${topArtist?.[1]||0} canciones en tu top`, img:null },
+  ];
+
+  document.getElementById('records-content').innerHTML = `
+    <div style="margin-bottom:1.5rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">🏆 Tus récords personales</h2>
+      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Lo más extremo de tu gusto musical</p>
+    </div>
+    <div class="records-grid">
+      ${records.map(r=>`
+        <div class="record-card">
+          <div class="record-icon">${r.icon}</div>
+          <div class="record-label">${r.label}</div>
+          <div class="record-value">${r.value}</div>
+          <div class="record-sub">${r.sub}</div>
+          ${r.img ? `<img class="record-cover" src="${r.img}" alt="">` : ''}
+        </div>`).join('')}
+    </div>
+  `;
+}
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showToast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>
