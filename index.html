@@ -1087,6 +1087,7 @@ function setRange(range, btn) {
   recsLoaded = false;
   gemsRendered = false;
   evolutionRendered = false;
+  window._globeBuilt = false;
   sessionRendered = false;
   paletteRendered = false;
   timelineRendered = false;
@@ -1704,7 +1705,7 @@ function mbAreaToCode(areaName) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function renderMap() {
-  if (document.getElementById('map-content').innerHTML.length > 50) return;
+  if (window._globeBuilt) return;  window._globeBuilt = true;
 
   // Build country data from ALL 200 tracks
   const countryTracks = {};
@@ -1743,6 +1744,7 @@ function renderMap() {
       <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.25rem;">🌍 Globo de orígenes</h2>
       <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Arrastra el globo · Pasa el cursor sobre un punto para ver tus canciones</p>
       <div id="mb-lookup-status" style="margin-top:.4rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--green);transition:opacity 1s;"></div>
+      <div id="globe-country-count" style="margin-top:.2rem;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);"></div>
     </div>
 
     <!-- Year range slider -->
@@ -1826,6 +1828,12 @@ function renderMap() {
   window._globeAllCountryTracks = JSON.parse(JSON.stringify(
     Object.fromEntries(Object.entries(countryTracks).map(([k,v])=>[k,v.map(t=>({id:t.id,year:parseInt(t.album?.release_date?.split('-')[0])||0}))]))
   ));
+
+  // Show how many countries found
+  const countEl = document.getElementById('globe-country-count');
+  if (countEl) countEl.textContent = sorted.length > 0
+    ? `${sorted.length} países identificados de ${tracksData.length} canciones`
+    : '⚠️ No se identificaron países — revisa la consola (F12)';
 
   initGlobe(countryTracks, sorted);
   updateYearFill();
@@ -1951,8 +1959,9 @@ let _globeGroup = null;
 let _markerMeshes = []; // {mesh, code, tracks}
 
 function buildGlobe(countryTracks, sorted) {
+  console.log('[Globe] buildGlobe called, sorted countries:', sorted.length, sorted.map(s=>s[0]));
   const canvas = document.getElementById('globe-canvas');
-  if (!canvas) return;
+  if (!canvas) { console.error('[Globe] canvas not found!'); return; }
   const W = canvas.parentElement.clientWidth;
   const H = Math.min(W * 0.75, 520);
   canvas.width = W;
@@ -2048,7 +2057,7 @@ function buildGlobe(countryTracks, sorted) {
   const animate = () => {
     animId = requestAnimationFrame(animate);
     const t = Date.now()*0.0018;
-    // Pulse only the halos softly
+    // Pulse halos
     _markerMeshes.forEach((m,i)=>{
       if (m.isHalo) {
         const p = 1 + Math.sin(t + i*0.9)*0.18;
@@ -2056,18 +2065,23 @@ function buildGlobe(countryTracks, sorted) {
         m.mesh.material.opacity = 0.35 + Math.sin(t+i*0.9)*0.15;
       }
     });
-    // Hover
+    // Hover — use recursive:true so it finds children inside the group
     raycaster.setFromCamera(mouse, camera);
-    const hits = raycaster.intersectObjects(allMeshes);
+    const hits = raycaster.intersectObjects(allMeshes, false);
     if (hits.length) {
       const obj = hits[0].object;
       const code = obj._cc;
-      if (code && code !== hoveredCountry) {
-        hoveredCountry = code;
-        showCountryCard(code, obj._tr);
-        const tt = document.getElementById('globe-tooltip');
-        if (tt) tt.textContent = (COUNTRY_FLAGS[code]||'') + ' ' + (COUNTRY_NAMES[code]||code);
+      if (code) {
+        if (code !== hoveredCountry) {
+          hoveredCountry = code;
+          showCountryCard(code, obj._tr);
+          const tt = document.getElementById('globe-tooltip');
+          if (tt) tt.textContent = (COUNTRY_FLAGS[code]||'') + ' ' + (COUNTRY_NAMES[code]||code);
+        }
       }
+    } else {
+      // Reset so re-hovering same country works after moving away
+      hoveredCountry = null;
     }
     renderer.render(scene, camera);
   };
@@ -2078,15 +2092,20 @@ function buildGlobe(countryTracks, sorted) {
   canvas.addEventListener('mousedown', e=>{ dragging=true; px={x:e.clientX,y:e.clientY}; canvas.style.cursor='grabbing'; });
   window.addEventListener('mouseup', ()=>{ dragging=false; if(canvas) canvas.style.cursor='grab'; });
   window.addEventListener('mousemove', e=>{
+    // Always update mouse for hover detection
     const rect = canvas.getBoundingClientRect();
-    mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
-    mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
+    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+      mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
+      mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
+    } else {
+      mouse.set(-999,-999);
+    }
     if (!dragging) return;
     globeGroup.rotation.y += (e.clientX-px.x)*0.007;
     globeGroup.rotation.x = Math.max(-1.2,Math.min(1.2, globeGroup.rotation.x+(e.clientY-px.y)*0.007));
     px={x:e.clientX,y:e.clientY};
   });
-  canvas.addEventListener('mouseleave',()=>mouse.set(-999,-999));
+  // mouse reset handled in mousemove bounds check
   canvas.addEventListener('touchstart',e=>{ dragging=true; px={x:e.touches[0].clientX,y:e.touches[0].clientY}; },{passive:true});
   canvas.addEventListener('touchend',()=>dragging=false,{passive:true});
   canvas.addEventListener('touchmove',e=>{
