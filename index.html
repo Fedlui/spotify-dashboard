@@ -329,6 +329,114 @@
 </head>
 <body>
 
+<!-- CONSENT MODAL — shown once before anything else -->
+<div id="consent-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;padding:1.25rem;backdrop-filter:blur(8px);">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:22px;
+              padding:2.25rem 2.5rem;max-width:500px;width:100%;
+              box-shadow:0 0 80px rgba(29,185,84,.12);position:relative;overflow:hidden;">
+    <!-- top green line -->
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--green),transparent);"></div>
+
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:2.5rem;margin-bottom:.75rem;">🎵</div>
+      <h2 style="font-size:1.35rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.4rem;">Bienvenido a Spotify Pulse</h2>
+      <p style="font-size:.8rem;color:var(--muted);font-family:'JetBrains Mono',monospace;line-height:1.6;">
+        Antes de continuar, lee cómo usamos tu información.
+      </p>
+    </div>
+
+    <!-- What we access -->
+    <div style="background:rgba(29,185,84,.06);border:1px solid rgba(29,185,84,.18);border-radius:14px;padding:1rem 1.25rem;margin-bottom:1rem;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);margin-bottom:.625rem;">¿Qué datos accedemos?</div>
+      <div style="display:flex;flex-direction:column;gap:.4rem;">
+        <div style="display:flex;gap:.625rem;align-items:flex-start;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+          <span style="color:var(--green);flex-shrink:0;">✓</span>
+          <span>Tus <strong style="color:var(--text);">canciones más escuchadas</strong> de Spotify (solo lectura)</span>
+        </div>
+        <div style="display:flex;gap:.625rem;align-items:flex-start;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+          <span style="color:var(--green);flex-shrink:0;">✓</span>
+          <span>Tu <strong style="color:var(--text);">nombre de perfil</strong> de Spotify</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- What we DON'T do -->
+    <div style="background:rgba(248,113,113,.04);border:1px solid rgba(248,113,113,.15);border-radius:14px;padding:1rem 1.25rem;margin-bottom:1.25rem;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--red);margin-bottom:.625rem;">Lo que NO hacemos</div>
+      <div style="display:flex;flex-direction:column;gap:.4rem;">
+        <div style="display:flex;gap:.625rem;align-items:flex-start;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+          <span style="color:var(--red);flex-shrink:0;">✗</span>
+          <span>No guardamos tus datos en ningún servidor</span>
+        </div>
+        <div style="display:flex;gap:.625rem;align-items:flex-start;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+          <span style="color:var(--red);flex-shrink:0;">✗</span>
+          <span>No vendemos ni compartimos tu información</span>
+        </div>
+        <div style="display:flex;gap:.625rem;align-items:flex-start;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+          <span style="color:var(--red);flex-shrink:0;">✗</span>
+          <span>No modificamos tu cuenta de Spotify</span>
+        </div>
+        <div style="display:flex;gap:.625rem;align-items:flex-start;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+          <span style="color:var(--red);flex-shrink:0;">✗</span>
+          <span>No pedimos contraseñas — todo va directo a Spotify</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email input -->
+    <div style="margin-bottom:1rem;">
+      <label style="display:block;font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem;">
+        Tu correo de Spotify
+      </label>
+      <input type="email" id="consent-email"
+        placeholder="ejemplo@correo.com"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);
+               border-radius:10px;padding:.75rem 1rem;color:var(--text);
+               font-family:'JetBrains Mono',monospace;font-size:.82rem;
+               outline:none;transition:border-color .2s;"
+        oninput="checkConsentReady()"
+        onfocus="this.style.borderColor='var(--green)'"
+        onblur="this.style.borderColor='var(--border)'" />
+      <!-- status: valid email format -->
+      <div id="consent-email-hint" style="margin-top:.3rem;font-size:.67rem;font-family:'JetBrains Mono',monospace;min-height:1rem;"></div>
+    </div>
+
+    <!-- Not-authorized message (hidden by default) -->
+    <div id="consent-not-auth" style="display:none;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.25);
+         border-radius:12px;padding:.875rem 1rem;margin-bottom:1rem;">
+      <div style="font-size:.72rem;font-weight:700;color:var(--yellow);margin-bottom:.3rem;">⚠️ Correo no autorizado</div>
+      <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);line-height:1.6;">
+        Este correo no está en la lista de acceso.<br>
+        Por favor comparte tu correo de Spotify con el administrador para que te agregue.
+      </div>
+    </div>
+
+    <!-- Accept checkbox (only shown when email is authorized) -->
+    <div id="consent-accept-wrap" style="display:none;">
+      <label style="display:flex;align-items:flex-start;gap:.75rem;cursor:pointer;margin-bottom:1.25rem;">
+        <input type="checkbox" id="consent-check" onchange="checkConsentReady()"
+          style="margin-top:.15rem;width:16px;height:16px;accent-color:var(--green);cursor:pointer;flex-shrink:0;" />
+        <span style="font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);line-height:1.5;">
+          Entiendo cómo se usan mis datos y acepto los
+          <a href="#" onclick="showConsentPrivacy();return false;" style="color:var(--green);text-decoration:none;">términos de privacidad</a>
+        </span>
+      </label>
+    </div>
+
+    <!-- CTA -->
+    <button id="consent-btn" onclick="acceptConsent()" disabled
+      style="width:100%;background:var(--green);color:#000;font-family:'Syne',sans-serif;
+             font-weight:800;font-size:.95rem;padding:.9rem;border-radius:100px;border:none;
+             cursor:not-allowed;opacity:.4;transition:all .25s;letter-spacing:.02em;">
+      Continuar →
+    </button>
+
+    <p style="text-align:center;margin-top:.875rem;font-size:.65rem;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.25);">
+      Tus datos nunca salen de tu navegador · Hecho por fedlui
+    </p>
+  </div>
+</div>
+
 <header>
   <div class="logo">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -341,37 +449,239 @@
 
 <!-- AUTH -->
 <div id="auth-screen">
-  <div class="auth-card">
-    <div class="auth-icon">🎵</div>
-    <h1 class="auth-title">Analiza tu música</h1>
-    <p class="auth-desc">Conecta tu cuenta de Spotify para ver análisis detallados<br>de tus canciones más escuchadas.</p>
-    <button class="btn-spotify" onclick="startAuth()">
+  <style>
+    .auth-features { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-bottom:2rem; text-align:left; }
+    .auth-feature  { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:12px; }
+    .auth-feature-icon { font-size:1.2rem; flex-shrink:0; margin-top:.05rem; }
+    .auth-feature-text { font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); line-height:1.5; }
+    .auth-feature-text strong { color:var(--text); display:block; margin-bottom:.1rem; font-family:'Syne',sans-serif; font-size:.75rem; }
+    .auth-privacy { display:flex; align-items:center; gap:.5rem; margin-top:1.25rem; justify-content:center; font-size:.68rem; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+    .auth-privacy a { color:var(--green); text-decoration:none; }
+    .auth-perms { background:rgba(29,185,84,.06); border:1px solid rgba(29,185,84,.15); border-radius:12px; padding:.875rem 1rem; margin-bottom:1.75rem; text-align:left; }
+    .auth-perms-title { font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--green); margin-bottom:.5rem; }
+    .auth-perm-row { display:flex; align-items:center; gap:.5rem; font-size:.72rem; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-bottom:.3rem; }
+    .auth-perm-row:last-child { margin-bottom:0; }
+    .auth-perm-row::before { content:'✓'; color:var(--green); font-weight:700; flex-shrink:0; }
+  </style>
+  <div class="auth-card" style="max-width:560px;">
+    <!-- Logo -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:.75rem;margin-bottom:1.5rem;">
+      <div style="width:52px;height:52px;background:var(--green-dim);border:1px solid rgba(29,185,84,.3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🎵</div>
+      <div style="text-align:left;">
+        <div style="font-size:1.4rem;font-weight:800;letter-spacing:-.04em;background:linear-gradient(135deg,#fff 40%,var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Spotify Pulse</div>
+        <div style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Análisis personal de tu música</div>
+      </div>
+    </div>
+
+    <h1 class="auth-title" style="font-size:1.6rem;margin-bottom:.5rem;">Descubre tu identidad musical</h1>
+    <p class="auth-desc" style="font-size:.82rem;margin-bottom:1.5rem;">Conecta Spotify para ver desde qué países viene tu música,<br>qué épocas dominas y estadísticas que Spotify no te muestra.</p>
+
+    <!-- Features grid -->
+    <div class="auth-features">
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🌍</div>
+        <div class="auth-feature-text"><strong>Globo de orígenes</strong>Ve de qué países son tus artistas en un globo 3D interactivo</div>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🃏</div>
+        <div class="auth-feature-text"><strong>Cartas por época</strong>Filtra tus canciones por los 2000s, 90s, 80s y más</div>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🎯</div>
+        <div class="auth-feature-text"><strong>Tu Wrapped personal</strong>Estadísticas cinematográficas de tus top 200 canciones</div>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">💿</div>
+        <div class="auth-feature-text"><strong>Gemas ocultas</strong>Canciones muy buenas que casi nadie conoce en tu lista</div>
+      </div>
+    </div>
+
+    <!-- Permisos que se piden -->
+    <div class="auth-perms">
+      <div class="auth-perms-title">🔒 Solo lectura — permisos que se solicitan</div>
+      <div class="auth-perm-row">Ver tus canciones más escuchadas (top 200)</div>
+      <div class="auth-perm-row">Acceso de solo lectura — nunca modificamos tu cuenta</div>
+      <div class="auth-perm-row">No guardamos tus datos en ningún servidor</div>
+    </div>
+
+    <!-- CTA -->
+    <button class="btn-spotify" onclick="startAuth()" style="width:100%;justify-content:center;font-size:1rem;padding:1rem;">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg>
-      Conectar con Spotify
+      Iniciar sesión con Spotify
     </button>
-    <p class="auth-note">Inicia sesión con tu cuenta de Spotify</p>
+
+    <div class="auth-privacy">
+      <span>🔐 Conexión segura OAuth 2.0 PKCE</span>
+      <span>·</span>
+      <a href="#privacy" onclick="showPrivacy()">Política de privacidad</a>
+    </div>
+  </div>
+</div>
+
+<!-- PRIVACY MODAL (requerido por Spotify para Extended Quota) -->
+<div id="privacy-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem;max-width:540px;width:100%;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+      <h2 style="font-size:1.2rem;font-weight:800;">🔐 Política de Privacidad</h2>
+      <button onclick="closePrivacy()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.35rem .75rem;cursor:pointer;font-size:.85rem;">✕ Cerrar</button>
+    </div>
+    <div style="font-size:.8rem;font-family:'JetBrains Mono',monospace;color:var(--muted);line-height:1.8;">
+      <p style="margin-bottom:1rem;"><strong style="color:var(--text);">Spotify Pulse</strong> es una aplicación de análisis musical personal.</p>
+      <p style="margin-bottom:.75rem;"><strong style="color:var(--text);">¿Qué datos accedemos?</strong><br>
+      Solo leemos tu historial de canciones más escuchadas mediante la API oficial de Spotify (<code>user-top-read</code>).</p>
+      <p style="margin-bottom:.75rem;"><strong style="color:var(--text);">¿Guardamos tus datos?</strong><br>
+      No. Todo el procesamiento ocurre en tu navegador. No tenemos base de datos ni servidor que almacene tu información.</p>
+      <p style="margin-bottom:.75rem;"><strong style="color:var(--text);">¿Compartimos tus datos?</strong><br>
+      No. Tus datos nunca salen de tu dispositivo hacia terceros.</p>
+      <p style="margin-bottom:.75rem;"><strong style="color:var(--text);">Token de Spotify</strong><br>
+      El token de acceso se guarda únicamente en tu sesión del navegador (<code>sessionStorage</code>) y se elimina cuando cierras la pestaña.</p>
+      <p style="margin-bottom:.75rem;"><strong style="color:var(--text);">¿Cómo revocar el acceso?</strong><br>
+      En cualquier momento puedes ir a <a href="https://www.spotify.com/account/apps/" target="_blank" style="color:var(--green);">spotify.com/account/apps</a> y remover el acceso de "Spotify Pulse".</p>
+      <p style="color:rgba(255,255,255,.3);font-size:.7rem;margin-top:1.5rem;">Última actualización: 2025 · Desarrollado por fedlui</p>
+    </div>
   </div>
 </div>
 
 <!-- SETUP -->
 <div id="setup-screen" class="hidden">
-  <div class="setup-card">
-    <h2 class="setup-title">Configuración</h2>
-    <p class="setup-sub">Credenciales de Spotify Developer</p>
-    <div class="steps-hint">
-      <h4>📋 Cómo obtener tu Client ID</h4>
-      <p>1. Ve a <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com/dashboard</a><br>
-      2. Crea una nueva App<br>
-      3. Agrega como Redirect URI: <strong id="redirect-display"></strong><br>
-      4. Copia tu Client ID</p>
+  <style>
+    .setup-card { max-width:680px; }
+    .step-block {
+      display:flex; gap:1rem; padding:1rem; margin-bottom:.625rem;
+      background:rgba(255,255,255,.02); border:1px solid var(--border);
+      border-radius:14px; align-items:flex-start; transition:border-color .2s;
+    }
+    .step-block:hover { border-color:rgba(29,185,84,.25); }
+    .step-num {
+      width:30px; height:30px; border-radius:50%; background:var(--green-dim);
+      border:1px solid rgba(29,185,84,.4); color:var(--green); font-weight:800;
+      font-size:.85rem; display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; margin-top:.1rem;
+    }
+    .step-body { flex:1; min-width:0; }
+    .step-title { font-size:.9rem; font-weight:700; margin-bottom:.3rem; }
+    .step-desc { font-size:.75rem; font-family:'JetBrains Mono',monospace; color:var(--muted); line-height:1.6; }
+    .step-desc a { color:var(--green); text-decoration:none; font-weight:600; }
+    .step-desc a:hover { text-decoration:underline; }
+    .step-code {
+      display:inline-block; background:rgba(29,185,84,.1); border:1px solid rgba(29,185,84,.2);
+      color:var(--green); font-family:'JetBrains Mono',monospace; font-size:.72rem;
+      padding:.2rem .6rem; border-radius:6px; margin:.25rem 0; word-break:break-all;
+    }
+    .step-img {
+      margin-top:.625rem; background:var(--surface2); border:1px solid var(--border);
+      border-radius:10px; padding:.625rem .875rem;
+      font-size:.7rem; font-family:'JetBrains Mono',monospace; color:var(--muted);
+      display:flex; align-items:center; gap:.5rem;
+    }
+    .uri-copy {
+      display:flex; align-items:center; gap:.5rem; margin-top:.5rem;
+      background:rgba(29,185,84,.08); border:1px solid rgba(29,185,84,.2);
+      border-radius:8px; padding:.5rem .75rem;
+    }
+    .uri-copy span { flex:1; font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--green); word-break:break-all; }
+    .uri-copy button {
+      background:rgba(29,185,84,.15); border:1px solid rgba(29,185,84,.3);
+      color:var(--green); font-family:'JetBrains Mono',monospace; font-size:.68rem;
+      padding:.3rem .6rem; border-radius:6px; cursor:pointer; white-space:nowrap;
+      transition:all .15s;
+    }
+    .uri-copy button:hover { background:rgba(29,185,84,.25); }
+  </style>
+
+  <div class="setup-card" style="padding:2rem 2.5rem;">
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:1.75rem;">
+      <div style="font-size:2rem;margin-bottom:.5rem;">⚙️</div>
+      <h2 class="setup-title" style="font-size:1.4rem;margin-bottom:.3rem;">Configuración en 3 minutos</h2>
+      <p class="setup-sub" style="font-size:.8rem;">Necesitas crear una app gratuita en Spotify Developer.<br>Es solo para obtener un código — no cuesta nada.</p>
     </div>
-    <div class="form-group">
-      <label>Client ID de Spotify</label>
-      <input type="text" id="client-id-input" placeholder="Pega aquí tu Client ID..." />
+
+    <!-- Pasos -->
+    <div style="margin-bottom:1.5rem;">
+
+      <!-- Paso 1 -->
+      <div class="step-block">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Entra a Spotify Developer</div>
+          <div class="step-desc">
+            Ve a <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com/dashboard</a>
+            e inicia sesión con tu cuenta de Spotify (la misma que usas normalmente).<br><br>
+            Da click en <strong style="color:var(--text);">Create app</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 2 -->
+      <div class="step-block">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Llena el formulario de la app</div>
+          <div class="step-desc">
+            <strong style="color:var(--text);">App name:</strong> escribe cualquier cosa, ej: <span class="step-code">Mi Dashboard</span><br>
+            <strong style="color:var(--text);">App description:</strong> escribe algo breve, ej: <span class="step-code">Análisis musical personal</span><br>
+            <strong style="color:var(--text);">Redirect URI:</strong> copia y pega exactamente esto:
+            <div class="uri-copy">
+              <span id="redirect-display-main"></span>
+              <button onclick="copyRedirectUri()">📋 Copiar</button>
+            </div>
+            <br>
+            Marca la casilla de <strong style="color:var(--text);">Web API</strong> y acepta los términos.<br>
+            Da click en <strong style="color:var(--text);">Save</strong>.
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 3 -->
+      <div class="step-block" style="border-color:rgba(29,185,84,.3);">
+        <div class="step-num" style="background:rgba(29,185,84,.2);border-color:var(--green);">3</div>
+        <div class="step-body">
+          <div class="step-title">Copia tu Client ID</div>
+          <div class="step-desc">
+            Ya dentro de tu app, verás el <strong style="color:var(--text);">Client ID</strong> en la pantalla principal.<br>
+            Es una cadena de letras y números como esta:
+            <span class="step-code">xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</span><br><br>
+            Cópiala y pégala abajo. ¡Eso es todo!
+          </div>
+          <div class="step-img">
+            <span>💡</span>
+            <span>El Client Secret NO lo necesitas — solo el Client ID</span>
+          </div>
+        </div>
+      </div>
+
     </div>
+
+    <!-- Input Client ID -->
+    <div style="margin-bottom:1rem;">
+      <label style="display:block;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;">
+        Tu Client ID de Spotify
+      </label>
+      <input type="text" id="client-id-input"
+        placeholder="Pega aquí tu Client ID (32 caracteres)..."
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);
+               border-radius:10px;padding:.875rem 1rem;color:var(--text);
+               font-family:'JetBrains Mono',monospace;font-size:.85rem;
+               outline:none;transition:border-color .2s;"
+        oninput="validateClientId(this)"
+        onfocus="this.style.borderColor='var(--green)'"
+        onblur="this.style.borderColor='var(--border)'" />
+      <div id="client-id-hint" style="margin-top:.4rem;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);min-height:1rem;"></div>
+    </div>
+
     <div id="setup-error" class="error-box hidden"></div>
-    <button class="btn-primary" onclick="doAuth()">Conectar con Spotify →</button>
-    <button class="btn-outline" style="width:100%;margin-top:.75rem;" onclick="showAuth()">← Volver</button>
+
+    <button class="btn-primary" id="connect-btn" onclick="doAuth()" style="width:100%;opacity:.5;cursor:not-allowed;" disabled>
+      Conectar con Spotify →
+    </button>
+    <button class="btn-outline" style="width:100%;margin-top:.75rem;" onclick="showAuth()">
+      ← Volver
+    </button>
+
+    <p style="text-align:center;margin-top:1.25rem;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">
+      🔒 Tu Client ID solo se usa en tu navegador — nunca lo enviamos a ningún servidor
+    </p>
   </div>
 </div>
 
@@ -499,9 +809,15 @@
   </p>
 </footer>
 
+<script src="config.js" onerror="console.warn('config.js not found — app will run in open mode')"></script>
 <script>
 // ===== CONFIG =====
-const CLIENT_ID = 'f1d1a7deb2f04f038787128a2fd4516a';
+// CLIENT_ID y emails autorizados se cargan desde config.js (NO está en GitHub)
+// Si no existe config.js, la app pide al usuario que contacte al admin.
+const CLIENT_ID   = (typeof _APP_CONFIG !== 'undefined') ? _APP_CONFIG.clientId   : null;
+const ALLOWED_EMAILS = (typeof _APP_CONFIG !== 'undefined') ? (_APP_CONFIG.allowedEmails || []) : [];
+const BACKEND_URL = null;
+
 const LASTFM_KEY = '6c708f592f3f69bcfb89c9a119c07fbb';
 const REDIRECT_URI = window.location.href.split('?')[0].split('#')[0];
 const SCOPES = 'user-top-read user-read-private user-read-email';
@@ -555,13 +871,17 @@ async function generateCodeChallenge(verifier) {
 // ===== INIT =====
 window.onload = async function() {
   const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
+  const code   = params.get('code');
+
+  // Returning from Spotify OAuth — skip consent, exchange code directly
   if (params.get('error')) { showAuth(); return; }
   if (code) {
     history.replaceState(null,'',window.location.pathname);
     await exchangeCode(code);
     return;
   }
+
+  // Already have a valid token in session
   const stored = sessionStorage.getItem('sp_token');
   const expiry = sessionStorage.getItem('sp_expiry');
   if (stored && expiry && Date.now() < parseInt(expiry)) {
@@ -569,10 +889,42 @@ window.onload = async function() {
     showDashboard();
     return;
   }
-  showAuth();
+
+  // First time or returning without session — show consent modal
+  const consented = sessionStorage.getItem('sp_consented');
+  if (consented) {
+    showAuth();
+  } else {
+    showConsentModal();
+  }
 };
 
 async function exchangeCode(code) {
+  // ── Modo backend seguro ────────────────────────────────────────────
+  if (BACKEND_URL) {
+    try {
+      const nonce = sessionStorage.getItem('pkce_nonce');
+      const res   = await fetch(BACKEND_URL + '/auth/token', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code, nonce, redirect_uri: REDIRECT_URI }),
+      });
+      const data = await res.json();
+      if (data.access_token) {
+        accessToken = data.access_token;
+        sessionStorage.setItem('sp_token', accessToken);
+        sessionStorage.setItem('sp_expiry', Date.now() + data.expires_in * 1000);
+        if (data.refresh_token) sessionStorage.setItem('sp_refresh', data.refresh_token);
+        sessionStorage.removeItem('pkce_nonce');
+        showDashboard();
+        return;
+      }
+      console.warn('[Backend token exchange failed]', data);
+      // fall through to direct PKCE
+    } catch(e) { console.warn('[Backend unreachable, using direct PKCE]', e); }
+  }
+
+  // ── Modo directo PKCE (fallback / sin backend) ─────────────────────
   const verifier = sessionStorage.getItem('pkce_verifier');
   if (!verifier) { showAuth(); return; }
   try {
@@ -596,6 +948,138 @@ async function exchangeCode(code) {
 }
 
 // ===== SCREENS =====
+function showConsentModal() {
+  const m = document.getElementById('consent-modal');
+  if (m) { m.style.display = 'flex'; }
+  // If config.js wasn't loaded at all, CLIENT_ID is null — warn once
+  if (!CLIENT_ID) {
+    const btn = document.getElementById('consent-btn');
+    if (btn) btn.textContent = '⚠ App no configurada';
+  }
+}
+
+function checkConsentReady() {
+  const emailEl   = document.getElementById('consent-email');
+  const email     = emailEl?.value?.trim() || '';
+  const checked   = document.getElementById('consent-check')?.checked;
+  const btn       = document.getElementById('consent-btn');
+  const hint      = document.getElementById('consent-email-hint');
+  const notAuth   = document.getElementById('consent-not-auth');
+  const acceptWrap= document.getElementById('consent-accept-wrap');
+
+  const validFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  // No input yet
+  if (!email) {
+    if (hint)      { hint.textContent=''; }
+    if (notAuth)   notAuth.style.display = 'none';
+    if (acceptWrap) acceptWrap.style.display = 'none';
+    if (btn)       { btn.disabled=true; btn.style.opacity='.4'; btn.style.cursor='not-allowed'; }
+    return;
+  }
+
+  // Invalid format
+  if (!validFormat) {
+    if (hint)      { hint.textContent='Correo inválido'; hint.style.color='var(--red)'; }
+    if (notAuth)   notAuth.style.display = 'none';
+    if (acceptWrap) acceptWrap.style.display = 'none';
+    if (btn)       { btn.disabled=true; btn.style.opacity='.4'; btn.style.cursor='not-allowed'; }
+    return;
+  }
+
+  // Valid format — check against allowed list
+  // If ALLOWED_EMAILS is empty (no config.js), allow everyone (open mode)
+  const openMode   = !ALLOWED_EMAILS || ALLOWED_EMAILS.length === 0;
+  const isAllowed  = openMode || ALLOWED_EMAILS.map(e=>e.toLowerCase()).includes(email.toLowerCase());
+
+  if (!isAllowed) {
+    if (hint)       { hint.textContent=''; }
+    if (notAuth)    notAuth.style.display = 'block';
+    if (acceptWrap) acceptWrap.style.display = 'none';
+    if (btn)        { btn.disabled=true; btn.style.opacity='.4'; btn.style.cursor='not-allowed'; }
+    if (emailEl)    emailEl.style.borderColor = 'var(--yellow)';
+    return;
+  }
+
+  // Authorized!
+  if (hint)       { hint.textContent='✓ Correo autorizado'; hint.style.color='var(--green)'; }
+  if (notAuth)    notAuth.style.display = 'none';
+  if (acceptWrap) acceptWrap.style.display = 'block';
+  if (emailEl)    emailEl.style.borderColor = 'var(--green)';
+
+  const ready = checked;
+  if (btn) {
+    btn.disabled      = !ready;
+    btn.style.opacity = ready ? '1' : '.4';
+    btn.style.cursor  = ready ? 'pointer' : 'not-allowed';
+  }
+}
+
+function acceptConsent() {
+  const email = document.getElementById('consent-email')?.value?.trim();
+  if (!email) return;
+  sessionStorage.setItem('sp_consented', '1');
+  sessionStorage.setItem('sp_consent_email', email);
+  const m = document.getElementById('consent-modal');
+  if (m) m.style.display = 'none';
+  // Go straight to Spotify auth — no setup screen needed
+  showAuth();
+}
+
+function showConsentPrivacy() {
+  // Reuse the existing privacy modal
+  showPrivacy();
+}
+
+// After consent → show the Client ID setup screen directly
+function showSetupFromConsent() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('setup-screen').classList.remove('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+  const rd = document.getElementById('redirect-display');
+  const rd2 = document.getElementById('redirect-display-main');
+  if (rd)  rd.textContent  = REDIRECT_URI;
+  if (rd2) rd2.textContent = REDIRECT_URI;
+}
+
+function copyRedirectUri() {
+  const uri = REDIRECT_URI;
+  navigator.clipboard.writeText(uri).then(() => {
+    const btn = document.querySelector('.uri-copy button');
+    if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = '📋 Copiar', 2000); }
+  });
+}
+
+function validateClientId(input) {
+  const val = input.value.trim();
+  const hint = document.getElementById('client-id-hint');
+  const btn  = document.getElementById('connect-btn');
+  // Spotify Client IDs are 32 hex chars
+  const valid = /^[a-f0-9]{32}$/i.test(val);
+  if (!val) {
+    hint.textContent = '';
+    btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed';
+  } else if (valid) {
+    hint.textContent = '✓ Client ID válido';
+    hint.style.color = 'var(--green)';
+    input.style.borderColor = 'var(--green)';
+    btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+  } else {
+    hint.textContent = val.length < 32 ? `Faltan ${32 - val.length} caracteres (son 32 en total)` : 'Formato incorrecto — revisa que lo copiaste completo';
+    hint.style.color = 'var(--red)';
+    input.style.borderColor = 'var(--red)';
+    btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed';
+  }
+}
+
+function showPrivacy() {
+  const m = document.getElementById('privacy-modal');
+  if (m) { m.style.display='flex'; }
+}
+function closePrivacy() {
+  const m = document.getElementById('privacy-modal');
+  if (m) { m.style.display='none'; }
+}
 function showAuth() {
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('setup-screen').classList.add('hidden');
@@ -604,6 +1088,19 @@ function showAuth() {
 
 async function startAuth() {
   if (!CLIENT_ID || CLIENT_ID === 'TU_CLIENT_ID_AQUI') { alert('⚠ Client ID no configurado.'); return; }
+
+  // ── Modo backend seguro ──────────────────────────────────────
+  if (BACKEND_URL) {
+    try {
+      const res  = await fetch(BACKEND_URL + '/auth/url?redirect_uri=' + encodeURIComponent(REDIRECT_URI));
+      const data = await res.json();
+      if (data.url && data.nonce) {
+        sessionStorage.setItem('pkce_nonce', data.nonce);
+        window.location.href = data.url;
+        return;
+      }
+    } catch(e) { console.warn('[Backend unreachable, fallback to direct PKCE]', e); }
+  }
   const verifier = generateRandom(64);
   const challenge = await generateCodeChallenge(verifier);
   sessionStorage.setItem('pkce_verifier', verifier);
@@ -2332,63 +2829,190 @@ function showCountryCard(code, tracks) {
   const card = document.getElementById('country-card');
   if (!card) return;
 
-  // Sort by rank in user's top list
-  const sorted = [...tracks].sort((a,b) =>
-    tracksData.indexOf(a) - tracksData.indexOf(b)
-  );
+  // Filter by active epoch
+  const epoch     = window._globeActiveEpoch || 'all';
+  const epochDef  = (window._globeEpochDefs||[]).find(e=>e.key===epoch);
+  const [lo, hi]  = epochDef ? epochDef.range : [0, 9999];
+  const filtered  = epoch === 'all'
+    ? tracks
+    : tracks.filter(t => {
+        const y = parseInt(t.album?.release_date?.split('-')[0]);
+        return y && y > 1900 && y >= lo && y <= hi;
+      });
+
+  const display = filtered.length ? filtered : tracks; // fallback all if none
+  const sorted  = [...display].sort((a,b) => tracksData.indexOf(a) - tracksData.indexOf(b));
+  const epochLabel = epochDef && epoch !== 'all' ? epochDef.label : null;
 
   card.style.justifyContent = 'flex-start';
   card.style.alignItems     = 'stretch';
+  card.style.padding        = '0';
+  card.style.overflow       = 'hidden';
+  card.style.background     = 'transparent';
+  card.style.border         = 'none';
+
   card.innerHTML = `
-    <!-- Header -->
-    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-shrink:0;">
-      <span style="font-size:2.2rem;line-height:1;">${flag}</span>
-      <div>
-        <div style="font-size:.55rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--green);">ORIGEN MUSICAL</div>
-        <div style="font-size:1rem;font-weight:800;letter-spacing:-.03em;">${name}</div>
-        <div style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${sorted.length} canción${sorted.length>1?'es':''}</div>
+    <style>
+      .poke-card {
+        position:relative;
+        border-radius:18px;
+        overflow:hidden;
+        cursor:pointer;
+        flex-shrink:0;
+        transition:transform .18s, box-shadow .18s;
+        background:linear-gradient(145deg,#111827,#0d1117 60%,#0f2318);
+        border:1.5px solid rgba(29,185,84,.35);
+        box-shadow:0 4px 20px rgba(0,0,0,.5);
+      }
+      .poke-card:hover {
+        transform:translateY(-4px) scale(1.03);
+        box-shadow:0 12px 36px rgba(29,185,84,.25),0 0 0 1px rgba(29,185,84,.5);
+        z-index:2;
+      }
+      .poke-card.top-card {
+        border-color:var(--green);
+        box-shadow:0 0 28px rgba(29,185,84,.3),0 4px 20px rgba(0,0,0,.6);
+      }
+      .poke-holographic {
+        position:absolute;inset:0;pointer-events:none;
+        background:linear-gradient(135deg,
+          transparent 0%,rgba(255,255,255,.03) 30%,
+          rgba(29,185,84,.07) 50%,rgba(255,255,255,.03) 70%,transparent 100%);
+        animation:holo-sweep 4s ease-in-out infinite alternate;
+      }
+      @keyframes holo-sweep {
+        from{background-position:0% 50%}
+        to{background-position:100% 50%}
+      }
+      .poke-shine {
+        position:absolute;inset:0;pointer-events:none;
+        background:conic-gradient(from 0deg at 60% 30%,transparent 60%,rgba(29,185,84,.06) 80%,transparent 90%);
+        animation:spin-holo 8s linear infinite;
+      }
+      @keyframes spin-holo{to{transform:rotate(360deg)}}
+      .poke-rank-badge {
+        position:absolute;top:.5rem;right:.5rem;
+        background:rgba(6,8,16,.85);border:1px solid var(--green);
+        color:var(--green);font-family:'JetBrains Mono',monospace;
+        font-size:.6rem;font-weight:700;padding:.2rem .45rem;
+        border-radius:6px;backdrop-filter:blur(4px);z-index:1;
+      }
+      .poke-hp {
+        position:absolute;top:.5rem;left:.5rem;
+        font-family:'JetBrains Mono',monospace;font-size:.55rem;
+        color:rgba(255,255,255,.5);z-index:1;
+        background:rgba(6,8,16,.7);padding:.15rem .4rem;border-radius:5px;
+      }
+      .poke-card-scroll {
+        overflow-y:auto;
+        display:flex;
+        flex-direction:column;
+        gap:.625rem;
+        padding:.5rem;
+        flex:1;
+        scrollbar-width:thin;
+        scrollbar-color:rgba(29,185,84,.3) transparent;
+      }
+    </style>
+
+    <!-- Header sticky -->
+    <div style="padding:.875rem 1rem .5rem;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        <span style="font-size:1.9rem;line-height:1;">${flag}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.5rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--green);">ORIGEN MUSICAL</div>
+          <div style="font-size:.95rem;font-weight:800;letter-spacing:-.03em;">${name}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--green);">${sorted.length}</div>
+          <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">canciones</div>
+          ${epochLabel ? `<div style="font-size:.55rem;font-family:'JetBrains Mono',monospace;color:var(--accent);margin-top:.1rem;">${epochLabel}</div>` : ''}
+        </div>
       </div>
     </div>
 
-    <!-- Scrollable track list -->
-    <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:.5rem;
-                scrollbar-width:thin;scrollbar-color:var(--border) transparent;
-                padding-right:.25rem;">
+    <!-- Card grid scroll -->
+    <div class="poke-card-scroll" style="max-height:520px;">
       ${sorted.map((t, i) => {
-        const cover = t.album?.images?.[2]?.url || t.album?.images?.[0]?.url;
-        const rank  = tracksData.indexOf(t) + 1;
-        const yr    = t.album?.release_date?.split('-')[0] || '—';
-        const mins  = Math.floor(t.duration_ms/60000);
-        const secs  = Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
-        const bpm   = t._audio?.bpm || '—';
+        const cover  = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url;
+        const thumb  = t.album?.images?.[2]?.url || cover;
+        const rank   = tracksData.indexOf(t) + 1;
+        const yr     = t.album?.release_date?.split('-')[0] || '?';
+        const bpm    = t._audio?.bpm || '—';
+        const pop    = t.popularity || 0;
+        const energy = t._audio?.energy ? Math.round(t._audio.energy*100) : null;
+        const key    = t._audio?.key != null ? ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][t._audio.key] : null;
+        const mins   = Math.floor(t.duration_ms/60000);
+        const secs   = String(Math.floor((t.duration_ms%60000)/1000)).padStart(2,'0');
+        const dur    = t.duration_ms ? mins+':'+secs : '—';
+        const artist = t.artists.map(a=>escHtml(a.name)).join(', ');
+        const isTop  = i === 0;
+        // HP bar = popularity
+        const hpPct  = pop + '%';
+        const hpCol  = pop > 70 ? '#1DB954' : pop > 40 ? '#fbbf24' : '#f87171';
+
         return `
-        <div style="display:flex;align-items:center;gap:.625rem;padding:.5rem .625rem;
-                    border-radius:10px;border:1px solid var(--border);
-                    background:${i===0?'rgba(29,185,84,.07)':'var(--bg)'};
-                    transition:background .15s;flex-shrink:0;"
-             onmouseover="this.style.background='rgba(29,185,84,.1)'"
-             onmouseout="this.style.background='${i===0?'rgba(29,185,84,.07)':'var(--bg)'}'">
-          <!-- Cover -->
+        <div class="poke-card${isTop?' top-card':''}">
+          <div class="poke-holographic"></div>
+          <div class="poke-shine"></div>
+          <div class="poke-rank-badge">#${rank}</div>
+          <div class="poke-hp">${yr}</div>
+
+          <!-- Cover image full width -->
           ${cover
-            ? `<img src="${cover}" style="width:42px;height:42px;border-radius:7px;object-fit:cover;flex-shrink:0;">`
-            : `<div style="width:42px;height:42px;border-radius:7px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.9rem;">♪</div>`}
-          <!-- Info -->
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.name)}</div>
-            <div style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              ${escHtml(t.artists[0]?.name||'')} · ${yr}
+            ? `<div style="position:relative;aspect-ratio:1;overflow:hidden;">
+                 <img src="${cover}" style="width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.92);">
+                 <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(6,8,16,.9));"></div>
+                 <!-- Title overlay at bottom of image -->
+                 <div style="position:absolute;bottom:0;left:0;right:0;padding:.5rem .625rem;">
+                   <div style="font-size:.75rem;font-weight:800;line-height:1.2;text-shadow:0 1px 4px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.name)}</div>
+                   <div style="font-size:.6rem;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${artist}</div>
+                 </div>
+               </div>`
+            : `<div style="aspect-ratio:1;background:var(--green-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;">
+                 <div style="font-size:2rem;">♪</div>
+                 <div style="font-size:.75rem;font-weight:800;margin-top:.5rem;text-align:center;">${escHtml(t.name)}</div>
+                 <div style="font-size:.6rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">${artist}</div>
+               </div>`}
+
+          <!-- Stats strip -->
+          <div style="padding:.5rem .625rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.3rem;">
+            <div style="text-align:center;">
+              <div style="font-size:.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--green);">${bpm}</div>
+              <div style="font-size:.5rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">BPM</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent2);">${energy != null ? energy+'%' : '—'}</div>
+              <div style="font-size:.5rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Energía</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent);">${dur}</div>
+              <div style="font-size:.5rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Duración</div>
             </div>
           </div>
-          <!-- Rank + BPM -->
-          <div style="text-align:right;flex-shrink:0;">
-            <div style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--green);font-weight:700;">#${rank}</div>
-            <div style="font-size:.6rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${bpm} BPM</div>
+
+          <!-- Popularity / HP bar -->
+          <div style="padding:0 .625rem .5rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.2rem;">
+              <span style="font-size:.5rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);">Popularidad</span>
+              <span style="font-size:.58rem;font-family:'JetBrains Mono',monospace;color:${hpCol};font-weight:700;">${pop}/100</span>
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;">
+              <div style="height:100%;width:${hpPct};background:${hpCol};border-radius:2px;transition:width .4s ease;"></div>
+            </div>
           </div>
         </div>`;
       }).join('')}
+
+      ${filtered.length === 0 ? `
+        <div style="text-align:center;padding:2rem;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem;">
+          Sin canciones de ${flag} ${name}<br>en los ${epochLabel||''}
+          <div style="margin-top:.75rem;font-size:.7rem;opacity:.6;">Mostrando todas las épocas</div>
+        </div>` : ''}
     </div>
   `;
 }
+
 
 
 function highlightCountryByCode(code) {
@@ -2472,72 +3096,251 @@ function buildSession(mode) {
 }
 
 // ===== PALETTE =====
-function renderPalette() {
-  if (paletteRendered) return;
-  paletteRendered = true;
+// ── COLOR NAMES map for filter labels ──────────────────────────────────
+const COLOR_RANGES = [
+  {name:'Rojo',     hMin:345, hMax:15,  col:'#ef4444'},
+  {name:'Naranja',  hMin:15,  hMax:45,  col:'#f97316'},
+  {name:'Amarillo', hMin:45,  hMax:70,  col:'#eab308'},
+  {name:'Verde',    hMin:70,  hMax:165, col:'#22c55e'},
+  {name:'Cyan',     hMin:165, hMax:200, col:'#06b6d4'},
+  {name:'Azul',     hMin:200, hMax:255, col:'#3b82f6'},
+  {name:'Morado',   hMin:255, hMax:310, col:'#a855f7'},
+  {name:'Rosa',     hMin:310, hMax:345, col:'#ec4899'},
+];
 
-  const covers = tracksData.slice(0,20).map(t => t.album?.images?.[0]?.url).filter(Boolean);
-
-  // Generate color palette from cover art hues using canvas
-  const colors = generatePaletteColors(tracksData.slice(0,40));
-
-  const container = document.getElementById('palette-content');
-  container.innerHTML = `
-    <div style="margin-bottom:1.5rem;">
-      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">🎨 Paleta de tu música</h2>
-      <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Los colores que definen tu gusto musical</p>
-    </div>
-    <div class="palette-hero">
-      ${colors.map((c,i) => `
-        <div class="palette-swatch" style="background:${c.hex}">
-          <div class="palette-swatch-label">${c.hex}</div>
-        </div>`).join('')}
-    </div>
-    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem;">
-      ${colors.map(c=>`
-        <div style="display:flex;align-items:center;gap:.5rem;">
-          <div style="width:24px;height:24px;border-radius:50%;background:${c.hex};border:2px solid rgba(255,255,255,.1)"></div>
-          <span style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--muted)">${c.hex} · ${c.label}</span>
-        </div>`).join('')}
-    </div>
-    <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Portadas de tus canciones</p>
-    <div class="palette-albums">
-      ${tracksData.slice(0,30).filter(t=>t.album?.images?.[1]?.url).map(t=>`
-        <div class="palette-album" title="${escHtml(t.name)}">
-          <img src="${t.album.images[1].url}" alt="${escHtml(t.name)}" loading="lazy">
-        </div>`).join('')}
-    </div>
-  `;
+function getColorRange(h) {
+  h = ((h % 360) + 360) % 360;
+  return COLOR_RANGES.find(r => {
+    if (r.hMin > r.hMax) return h >= r.hMin || h < r.hMax; // wraps around 360
+    return h >= r.hMin && h < r.hMax;
+  }) || COLOR_RANGES[0];
 }
 
-function generatePaletteColors(tracks) {
-  // Derive a unique palette based on track names/artists as a seed (deterministic)
-  const seed = tracks.map(t=>t.id).join('').split('').reduce((a,c)=>a+c.charCodeAt(0),0);
-  const rand = (n) => { let x = Math.sin(seed + n) * 10000; return x - Math.floor(x); };
-
-  // Generate 8 colors in HSL distributed across hue spectrum
-  const palette = [];
-  const hues = [0,30,60,120,180,210,270,320];
-  const colorLabels = ['Rojo','Naranja','Amarillo','Verde','Cyan','Azul','Morado','Rosa'];
-
-  hues.forEach((baseHue, i) => {
-    const hue = Math.round(baseHue + rand(i*7) * 30 - 15);
-    const sat = Math.round(50 + rand(i*13) * 40);
-    const lit = Math.round(40 + rand(i*17) * 25);
-    const h = ((hue % 360) + 360) % 360;
-    // Convert HSL to hex
-    const hex = hslToHex(h, sat, lit);
-    palette.push({ hex, label: colorLabels[i] });
-  });
-  return palette;
+function hexToHsl(hex) {
+  let r = parseInt(hex.slice(1,3),16)/255;
+  let g = parseInt(hex.slice(3,5),16)/255;
+  let b = parseInt(hex.slice(5,7),16)/255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+  let h=0,s=0,l=(max+min)/2;
+  if(d){
+    s=d/(1-Math.abs(2*l-1));
+    switch(max){case r:h=(g-b)/d+((g<b)?6:0);break;case g:h=(b-r)/d+2;break;case b:h=(r-g)/d+4;}
+    h*=60;
+  }
+  return {h:Math.round(h),s:Math.round(s*100),l:Math.round(l*100)};
 }
 
 function hslToHex(h, s, l) {
   s /= 100; l /= 100;
   const a = s * Math.min(l, 1-l);
-  const f = n => { const k = (n+h/30)%12; const c = l-a*Math.max(-1,Math.min(k-3,9-k,1)); return Math.round(255*c).toString(16).padStart(2,'0'); };
-  return `#${f(0)}${f(8)}${f(4)}`;
+  const f = n => { const k=(n+h/30)%12; const cv=l-a*Math.max(-1,Math.min(k-3,9-k,1)); return Math.round(255*cv).toString(16).padStart(2,'0'); };
+  return '#'+f(0)+f(8)+f(4);
 }
+
+// Dominant color from a cover image via canvas sampling
+function getDominantColor(img) {
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 32;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0, 32, 32);
+    const d = ctx.getImageData(0,0,32,32).data;
+    let rT=0,gT=0,bT=0,n=0;
+    for(let i=0;i<d.length;i+=16){
+      const r=d[i],g=d[i+1],b=d[i+2];
+      // skip near-white and near-black
+      if(r+g+b > 710 || r+g+b < 40) continue;
+      rT+=r; gT+=g; bT+=b; n++;
+    }
+    if(!n) return null;
+    const rr=Math.round(rT/n), gg=Math.round(gT/n), bb=Math.round(bT/n);
+    return '#'+[rr,gg,bb].map(v=>v.toString(16).padStart(2,'0')).join('');
+  } catch(e){ return null; }
+}
+
+let _paletteAllColors  = []; // [{hex, hsl, range, track}]
+let _paletteActiveFilter = 'all';
+
+function renderPalette() {
+  if (paletteRendered) return;
+  paletteRendered = true;
+
+  const container = document.getElementById('palette-content');
+  container.innerHTML = `
+    <div style="margin-bottom:1.25rem;">
+      <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.3rem;">🎨 Paleta de tu música</h2>
+      <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Colores extraídos de las portadas de tus canciones</p>
+    </div>
+
+    <!-- Color filter bar -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.875rem 1.25rem;margin-bottom:1.25rem;">
+      <div style="font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.625rem;">🎨 Filtrar por color</div>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap;" id="palette-filter-btns">
+        <button onclick="filterPalette('all')" data-pf="all"
+          style="background:linear-gradient(135deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6,#a855f7);
+                 border:2px solid white;color:#fff;font-family:'Syne',sans-serif;font-size:.75rem;
+                 font-weight:700;padding:.35rem .9rem;border-radius:100px;cursor:pointer;
+                 text-shadow:0 1px 3px rgba(0,0,0,.6);">
+          Todos
+        </button>
+        ${COLOR_RANGES.map(r => `
+          <button onclick="filterPalette('${r.name}')" data-pf="${r.name}"
+            style="background:${r.col};border:2px solid transparent;color:#fff;
+                   font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;
+                   padding:.35rem .9rem;border-radius:100px;cursor:pointer;opacity:.65;
+                   transition:all .2s;text-shadow:0 1px 3px rgba(0,0,0,.4);"
+            onmouseover="this.style.opacity='1'"
+            onmouseout="applyPaletteFilterStyle(this,'${r.name}')">
+            ${r.name}
+          </button>`).join('')}
+      </div>
+    </div>
+
+    <!-- Gradient collage strip -->
+    <div id="palette-gradient-strip" style="height:56px;border-radius:14px;margin-bottom:1.25rem;
+         border:1px solid var(--border);overflow:hidden;display:flex;">
+      <div style="flex:1;background:var(--surface);display:flex;align-items:center;justify-content:center;">
+        <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
+      </div>
+    </div>
+
+    <!-- Cover collage grid -->
+    <div id="palette-collage" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:4px;border-radius:14px;overflow:hidden;margin-bottom:1.5rem;min-height:200px;">
+      <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;padding:2rem;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.75rem;">
+        Cargando portadas...
+      </div>
+    </div>
+
+    <!-- Swatch list -->
+    <p style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Colores encontrados</p>
+    <div id="palette-swatches" style="display:flex;gap:.5rem;flex-wrap:wrap;"></div>
+  `;
+
+  // Load all cover images and extract colors
+  extractAllColors();
+}
+
+function extractAllColors() {
+  const tracks = tracksData.filter(t => t.album?.images?.[1]?.url || t.album?.images?.[0]?.url);
+  let loaded = 0;
+  _paletteAllColors = [];
+
+  tracks.forEach(t => {
+    const url = t.album.images[1]?.url || t.album.images[0]?.url;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const hex = getDominantColor(img);
+      if (hex) {
+        const hsl   = hexToHsl(hex);
+        const range = getColorRange(hsl.h);
+        _paletteAllColors.push({ hex, hsl, range: range.name, track: t, img: url });
+      }
+      loaded++;
+      if (loaded === tracks.length) buildPaletteUI('all');
+    };
+    img.onerror = () => { loaded++; if(loaded===tracks.length) buildPaletteUI('all'); };
+    img.src = url;
+  });
+
+  if (!tracks.length) buildPaletteUI('all');
+}
+
+function buildPaletteUI(filterName) {
+  _paletteActiveFilter = filterName;
+
+  // Filter and sort colors
+  let colors = _paletteAllColors.slice();
+  if (filterName !== 'all') {
+    colors = colors.filter(c => c.range === filterName);
+  }
+  // Sort by hue, then saturation desc
+  colors.sort((a,b) => a.hsl.h - b.hsl.h || b.hsl.s - a.hsl.s);
+
+  // ── Gradient strip ────────────────────────────────────────────────
+  const strip = document.getElementById('palette-gradient-strip');
+  if (strip) {
+    if (colors.length) {
+      const stops = colors.map((c,i) => `${c.hex} ${Math.round(i/(colors.length-1||1)*100)}%`).join(', ');
+      strip.style.background = `linear-gradient(90deg, ${stops})`;
+      strip.innerHTML = '';
+    } else {
+      strip.style.background = 'var(--surface)';
+      strip.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-family:JetBrains Mono,monospace;color:var(--muted);">Sin colores en este filtro</div>';
+    }
+  }
+
+  // ── Collage grid sorted by hue ────────────────────────────────────
+  const collage = document.getElementById('palette-collage');
+  if (collage) {
+    if (colors.length) {
+      collage.innerHTML = colors.map(c => `
+        <div style="position:relative;aspect-ratio:1;overflow:hidden;cursor:pointer;"
+             title="${escHtml(c.track.name)} · ${escHtml(c.track.artists[0]?.name||'')}"
+             onmouseover="this.querySelector('.cover-overlay').style.opacity='1'"
+             onmouseout="this.querySelector('.cover-overlay').style.opacity='0'">
+          <img src="${c.img}" style="width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.15);">
+          <!-- color dot -->
+          <div style="position:absolute;top:.3rem;right:.3rem;width:12px;height:12px;
+                      border-radius:50%;background:${c.hex};border:1.5px solid rgba(255,255,255,.6);
+                      box-shadow:0 1px 4px rgba(0,0,0,.5);"></div>
+          <!-- hover overlay -->
+          <div class="cover-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,.75);
+               opacity:0;transition:opacity .15s;display:flex;flex-direction:column;
+               align-items:center;justify-content:center;padding:.3rem;text-align:center;">
+            <div style="font-size:.6rem;font-weight:700;color:#fff;line-height:1.3;
+                        overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
+              ${escHtml(c.track.name)}
+            </div>
+            <div style="font-size:.55rem;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.6);margin-top:.15rem;">
+              ${c.hex}
+            </div>
+          </div>
+        </div>`).join('');
+    } else {
+      collage.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--muted);font-family:JetBrains Mono,monospace;font-size:.78rem;">Sin portadas en este color</div>';
+    }
+  }
+
+  // ── Swatches (unique hex, sorted by hue) ─────────────────────────
+  const swatches = document.getElementById('palette-swatches');
+  if (swatches) {
+    const unique = [...new Map(colors.map(c=>[c.hex,c])).values()];
+    swatches.innerHTML = unique.map(c => `
+      <div style="display:flex;align-items:center;gap:.4rem;padding:.35rem .625rem;
+                  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+                  cursor:pointer;transition:border-color .15s;"
+           title="${c.hex}"
+           onclick="navigator.clipboard.writeText('${c.hex}')"
+           onmouseover="this.style.borderColor='${c.hex}'"
+           onmouseout="this.style.borderColor='var(--border)'">
+        <div style="width:18px;height:18px;border-radius:4px;background:${c.hex};flex-shrink:0;border:1px solid rgba(255,255,255,.1);"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);">${c.hex}</span>
+      </div>`).join('');
+  }
+
+  // Update filter button styles
+  document.querySelectorAll('[data-pf]').forEach(btn => {
+    applyPaletteFilterStyle(btn, btn.getAttribute('data-pf'));
+  });
+}
+
+function filterPalette(name) {
+  _paletteActiveFilter = name;
+  buildPaletteUI(name);
+}
+
+function applyPaletteFilterStyle(btn, name) {
+  const isActive = name === _paletteActiveFilter;
+  if (name === 'all') {
+    btn.style.border = isActive ? '2px solid white' : '2px solid transparent';
+    btn.style.opacity = '1';
+  } else {
+    btn.style.border = isActive ? '2px solid white' : '2px solid transparent';
+    btn.style.opacity = isActive ? '1' : '.6';
+  }
+}
+
 
 // ===== TIMELINE / DECADES =====
 function renderTimeline() {
