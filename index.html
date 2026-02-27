@@ -1701,84 +1701,85 @@ function mbAreaToCode(areaName) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function renderMap() {
-  if (window._globeBuilt) return;  window._globeBuilt = true;
+  if (window._globeBuilt) return;
+  window._globeBuilt = true;
 
-  // Build country data from ALL 200 tracks
+  // Build country → tracks map
   const countryTracks = {};
   tracksData.forEach(t => {
     t.artists.forEach(a => {
       const country = ARTIST_COUNTRIES[a.name] || _mbCache[a.name];
       if (country) {
         if (!countryTracks[country]) countryTracks[country] = [];
-        if (!countryTracks[country].find(x=>x.id===t.id)) countryTracks[country].push(t);
+        if (!countryTracks[country].find(x => x.id === t.id)) countryTracks[country].push(t);
       }
     });
   });
+  const sorted = Object.entries(countryTracks).sort((a,b) => b[1].length - a[1].length);
 
-  const sorted = Object.entries(countryTracks).sort((a,b)=>b[1].length-a[1].length);
-
-  // Unknown artists grouped with their tracks
+  // Unknown artists
   const unknownMap = {};
   tracksData.forEach(t => {
     t.artists.forEach(a => {
-      const known = ARTIST_COUNTRIES[a.name] || _mbCache[a.name];
-      if (!known) {
+      if (!ARTIST_COUNTRIES[a.name] && !_mbCache[a.name]) {
         if (!unknownMap[a.name]) unknownMap[a.name] = [];
-        if (!unknownMap[a.name].find(x=>x.id===t.id)) unknownMap[a.name].push(t);
+        if (!unknownMap[a.name].find(x => x.id === t.id)) unknownMap[a.name].push(t);
       }
     });
   });
-  const unknownEntries = Object.entries(unknownMap).sort((a,b)=>b[1].length-a[1].length);
+  const unknownEntries = Object.entries(unknownMap).sort((a,b) => b[1].length - a[1].length);
 
-  // Year range for slider
-  const years = tracksData.map(t=>parseInt(t.album?.release_date?.split('-')[0])).filter(Boolean);
-  const minYear = Math.min(...years)||1960;
-  const maxYear = Math.max(...years)||2024;
+  // Épocas presentes en las canciones
+  const epochDefs = [
+    {key:'all',  label:'Todas',    range:[0,9999],   col:'var(--green)'},
+    {key:'2020s',label:'2020s',    range:[2020,2029], col:'#1DB954'},
+    {key:'2010s',label:'2010s',    range:[2010,2019], col:'#38bdf8'},
+    {key:'2000s',label:'2000s',    range:[2000,2009], col:'#c084fc'},
+    {key:'1990s',label:'90s',      range:[1990,1999], col:'#fbbf24'},
+    {key:'1980s',label:'80s',      range:[1980,1989], col:'#f87171'},
+    {key:'pre80', label:'Antes 80',range:[0,1979],    col:'#fb923c'},
+  ];
+  const trackYears = tracksData.map(t => parseInt(t.album?.release_date?.split('-')[0])||0);
+  // Only show epochs that have at least one track
+  const activeEpochs = epochDefs.filter(e =>
+    e.key === 'all' || trackYears.some(y => y >= e.range[0] && y <= e.range[1])
+  );
 
   document.getElementById('map-content').innerHTML = `
     <div style="margin-bottom:1rem;">
       <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.25rem;">🌍 Globo de orígenes</h2>
       <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Arrastra el globo · Pasa el cursor sobre un punto para ver tus canciones</p>
-      <div id="mb-lookup-status" style="margin-top:.4rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--green);transition:opacity 1s;"></div>
-      <div id="globe-country-count" style="margin-top:.2rem;font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);"></div>
+      <div id="mb-lookup-status" style="margin-top:.3rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--green);transition:opacity 1s;min-height:1rem;"></div>
     </div>
 
-    <!-- Year range slider -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem 1.5rem;margin-bottom:1.25rem;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
-        <span style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);">📅 Filtrar por año de lanzamiento</span>
-        <span id="year-range-label" style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--green);">${minYear} — ${maxYear}</span>
+    <!-- Epoch filter buttons -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.875rem 1.25rem;margin-bottom:1.25rem;">
+      <div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.625rem;">🗓 Filtrar por época</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;" id="epoch-btns">
+        ${activeEpochs.map((e,i) => `
+          <button onclick="filterByEpoch('${e.key}')" data-epoch="${e.key}"
+            style="background:${i===0?'rgba(29,185,84,.15)':'var(--surface2)'};
+                   border:1px solid ${i===0?'var(--green)':'var(--border)'};
+                   color:${i===0?e.col:'var(--muted)'};
+                   font-family:'Syne',sans-serif;font-size:.8rem;font-weight:700;
+                   padding:.4rem 1rem;border-radius:100px;cursor:pointer;
+                   transition:all .2s;white-space:nowrap;"
+            onmouseover="this.style.borderColor='${e.col}';this.style.color='${e.col}'"
+            onmouseout="applyEpochStyle(this,'${e.key}','${e.col}')">
+            ${e.label}
+          </button>`).join('')}
       </div>
-      <div style="position:relative;height:28px;display:flex;align-items:center;">
-        <div style="position:absolute;left:0;right:0;height:4px;background:var(--border);border-radius:2px;"></div>
-        <div id="year-track-fill" style="position:absolute;left:0;right:0;height:4px;background:var(--green);border-radius:2px;transform-origin:left;"></div>
-        <input type="range" id="year-min" min="${minYear}" max="${maxYear}" value="${minYear}" step="1"
-          style="position:absolute;width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:4px;pointer-events:none;"
-          oninput="updateYearFilter()">
-        <input type="range" id="year-max" min="${minYear}" max="${maxYear}" value="${maxYear}" step="1"
-          style="position:absolute;width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:4px;pointer-events:none;"
-          oninput="updateYearFilter()">
-      </div>
-      <style>
-        #year-min::-webkit-slider-thumb, #year-max::-webkit-slider-thumb {
-          -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
-          background:var(--green); border:2px solid #060810; cursor:pointer;
-          pointer-events:all; box-shadow:0 0 8px rgba(29,185,84,.5);
-        }
-        #year-min::-moz-range-thumb, #year-max::-moz-range-thumb {
-          width:18px; height:18px; border-radius:50%; background:var(--green);
-          border:2px solid #060810; cursor:pointer; pointer-events:all;
-        }
-      </style>
     </div>
 
     <!-- Globe + card -->
     <div style="display:grid;grid-template-columns:1fr 300px;gap:1.5rem;align-items:start;">
       <div style="position:relative;">
         <canvas id="globe-canvas" style="width:100%;border-radius:16px;background:transparent;cursor:grab;display:block;"></canvas>
-        <div id="globe-tooltip" style="position:absolute;top:1rem;left:1rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);background:rgba(6,8,16,.85);padding:.4rem .875rem;border-radius:8px;border:1px solid var(--border);pointer-events:none;transition:opacity .2s;">Arrastra para girar</div>
+        <div id="globe-tooltip" style="position:absolute;top:1rem;left:1rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);background:rgba(6,8,16,.9);padding:.35rem .75rem;border-radius:8px;border:1px solid var(--border);pointer-events:none;">Arrastra para girar</div>
+        <div id="globe-count" style="position:absolute;bottom:1rem;left:1rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);background:rgba(6,8,16,.8);padding:.25rem .6rem;border-radius:6px;border:1px solid var(--border);pointer-events:none;"></div>
       </div>
-      <div id="country-card" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.25rem;min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+      <!-- Country card: scrollable track list -->
+      <div id="country-card" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.25rem;min-height:340px;max-height:600px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;">
         <div style="font-size:3rem;margin-bottom:.5rem;">🌐</div>
         <div style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:center;">Pasa el cursor<br>sobre un marcador</div>
       </div>
@@ -1786,12 +1787,16 @@ function renderMap() {
 
     <!-- Country chips -->
     <div style="margin-top:1.5rem;">
-      <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Países identificados</p>
+      <p style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">Países en esta época</p>
       <div id="country-chips" style="display:flex;gap:.5rem;flex-wrap:wrap;">
-        ${sorted.map(([code,tracks])=>`
-          <div onclick="highlightCountryByCode('${code}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+        ${sorted.map(([code,trs]) => `
+          <div onclick="highlightCountryByCode('${code}')"
+               style="background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                      padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;"
+               onmouseover="this.style.borderColor='var(--green)'"
+               onmouseout="this.style.borderColor='var(--border)'">
             ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
-            <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${tracks.length}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${trs.length}</span>
           </div>`).join('')}
       </div>
     </div>
@@ -1799,147 +1804,200 @@ function renderMap() {
     <!-- Unknown collapsible -->
     ${unknownEntries.length ? `
     <div style="margin-top:1.25rem;">
-      <button onclick="toggleUnknown()" style="display:flex;align-items:center;gap:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem 1.25rem;cursor:pointer;width:100%;text-align:left;color:var(--text);font-family:'Syne',sans-serif;font-size:.85rem;font-weight:600;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--yellow)'" onmouseout="this.style.borderColor='var(--border)'">
-        <span style="font-size:1rem;">⚠️</span>
-        <span>${unknownEntries.length} artistas sin país identificado</span>
+      <button onclick="toggleUnknown()"
+        style="display:flex;align-items:center;gap:.75rem;background:var(--surface);
+               border:1px solid var(--border);border-radius:12px;padding:.75rem 1.25rem;
+               cursor:pointer;width:100%;text-align:left;color:var(--text);
+               font-family:'Syne',sans-serif;font-size:.85rem;font-weight:600;transition:border-color .2s;"
+        onmouseover="this.style.borderColor='var(--yellow)'"
+        onmouseout="this.style.borderColor='var(--border)'">
+        <span>⚠️</span>
+        <span>${unknownEntries.length} artistas sin país identificado (buscando en MusicBrainz…)</span>
         <span id="unknown-arrow" style="margin-left:auto;color:var(--muted);transition:transform .3s;">▼</span>
       </button>
       <div id="unknown-list" style="display:none;margin-top:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-        ${unknownEntries.map(([artist, tracks])=>`
-          <div id="unknown-row-${escHtml(artist.replace(/[^a-zA-Z0-9]/g,'_'))}" style="display:flex;align-items:center;gap:1rem;padding:.75rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.04);transition:opacity .5s;">
+        ${unknownEntries.map(([artist,trs]) => `
+          <div id="unknown-row-${artist.replace(/[^a-zA-Z0-9]/g,'_')}"
+               style="display:flex;align-items:center;gap:1rem;padding:.625rem 1.25rem;
+                      border-bottom:1px solid rgba(255,255,255,.04);transition:opacity .4s;">
             <div style="font-size:.85rem;font-weight:600;flex:1;">${escHtml(artist)}</div>
-            <div style="font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${tracks.length} canción${tracks.length>1?'es':''}</div>
-            <div style="display:flex;gap:.4rem;">
-              ${tracks.slice(0,3).map(t=>t.album?.images?.[2]?.url?`<img src="${t.album.images[2].url}" style="width:28px;height:28px;border-radius:4px;object-fit:cover;" title="${escHtml(t.name)}">`:'').join('')}
+            <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${trs.length} canción${trs.length>1?'es':''}</div>
+            <div style="display:flex;gap:.35rem;">
+              ${trs.slice(0,3).map(t => t.album?.images?.[2]?.url
+                ? `<img src="${t.album.images[2].url}" style="width:26px;height:26px;border-radius:4px;object-fit:cover;" title="${escHtml(t.name)}">`
+                : '').join('')}
             </div>
           </div>`).join('')}
       </div>
     </div>` : ''}
   `;
 
-  window._globeCountryTracks = countryTracks;
-  window._globeSorted = sorted;
-  window._globeMinYear = minYear;
-  window._globeMaxYear = maxYear;
-  window._globeAllCountryTracks = JSON.parse(JSON.stringify(
-    Object.fromEntries(Object.entries(countryTracks).map(([k,v])=>[k,v.map(t=>({id:t.id,year:parseInt(t.album?.release_date?.split('-')[0])||0}))]))
-  ));
+  // Store globals
+  window._globeCountryTracks    = countryTracks;
+  window._globeSorted           = sorted;
+  window._globeActiveEpoch      = 'all';
+  window._globeEpochDefs        = epochDefs;
+  // snapshot for epoch filtering: code -> [{id, year}]
+  window._globeAllCountryTracks = Object.fromEntries(
+    Object.entries(countryTracks).map(([k,v]) => [k, v.map(t => ({
+      id: t.id,
+      year: parseInt(t.album?.release_date?.split('-')[0]) || 0
+    }))])
+  );
 
-  // Show how many countries found
-  const countEl = document.getElementById('globe-country-count');
-  if (countEl) countEl.textContent = sorted.length > 0
-    ? `${sorted.length} países identificados de ${tracksData.length} canciones`
-    : '⚠️ No se identificaron países — revisa la consola (F12)';
+  const countEl = document.getElementById('globe-count');
+  if (countEl) countEl.textContent = sorted.length
+    ? `${sorted.length} países · ${tracksData.length} canciones`
+    : '⚠️ sin países identificados';
 
   initGlobe(countryTracks, sorted);
-  updateYearFill();
 
-  // Lookup unknown artists in MusicBrainz in background
-  if (unknownEntries.length > 0) {
-    lookupUnknownArtistsMB(unknownEntries);
+  if (unknownEntries.length) lookupUnknownArtistsMB(unknownEntries);
+}
+
+/* ── Epoch filter ─────────────────────────────── */
+function filterByEpoch(epochKey) {
+  window._globeActiveEpoch = epochKey;
+
+  // Update button styles
+  document.querySelectorAll('[data-epoch]').forEach(btn => {
+    const k   = btn.getAttribute('data-epoch');
+    const def = (window._globeEpochDefs||[]).find(e=>e.key===k);
+    const col = def?.col||'var(--green)';
+    if (k === epochKey) {
+      btn.style.background    = 'rgba(29,185,84,.15)';
+      btn.style.borderColor   = col;
+      btn.style.color         = col;
+    } else {
+      btn.style.background    = 'var(--surface2)';
+      btn.style.borderColor   = 'var(--border)';
+      btn.style.color         = 'var(--muted)';
+    }
+  });
+
+  // Filter tracks
+  const base = window._globeAllCountryTracks;
+  if (!base) return;
+  const def = (window._globeEpochDefs||[]).find(e=>e.key===epochKey);
+  const [lo,hi] = def ? def.range : [0,9999];
+
+  const filtered = {};
+  Object.entries(base).forEach(([code, items]) => {
+    const f = epochKey === 'all'
+      ? items
+      : items.filter(i => i.year >= lo && i.year <= hi);
+    if (f.length) {
+      filtered[code] = f.map(i => tracksData.find(t=>t.id===i.id)).filter(Boolean);
+    }
+  });
+  window._globeCountryTracks = filtered;
+  updateGlobeMarkers(filtered);
+
+  // Rebuild chips
+  const sortedF = Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length);
+  const chips = document.getElementById('country-chips');
+  if (chips) {
+    chips.innerHTML = sortedF.map(([code,trs]) => `
+      <div onclick="highlightCountryByCode('${code}')"
+           style="background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                  padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;"
+           onmouseover="this.style.borderColor='var(--green)'"
+           onmouseout="this.style.borderColor='var(--border)'">
+        ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
+        <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${trs.length}</span>
+      </div>`).join('');
+  }
+
+  // Reset card
+  const card = document.getElementById('country-card');
+  if (card) {
+    card.innerHTML = `
+      <div style="font-size:3rem;margin-bottom:.5rem;">🌐</div>
+      <div style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:center;">Pasa el cursor<br>sobre un marcador</div>`;
+    card.style.justifyContent = 'center';
   }
 }
 
+function applyEpochStyle(btn, key, col) {
+  if (window._globeActiveEpoch === key) {
+    btn.style.borderColor = col;
+    btn.style.color       = col;
+  } else {
+    btn.style.borderColor = 'var(--border)';
+    btn.style.color       = 'var(--muted)';
+  }
+}
+
+/* ── MusicBrainz background lookup ───────────── */
 async function lookupUnknownArtistsMB(unknownEntries) {
   const statusEl = document.getElementById('mb-lookup-status');
   let found = 0;
-
-  // Process in batches of 3, with 350ms delay between each (MusicBrainz rate limit = 1/sec)
   for (let i = 0; i < unknownEntries.length; i++) {
     const [artistName, tracks] = unknownEntries[i];
-    if (i > 0 && i % 3 === 0) await sleep(1100); // rate limit
-    else if (i > 0) await sleep(350);
+    if (i > 0 && i % 3 === 0) await sleep(1100);
+    else if (i > 0) await sleep(380);
 
     const country = await lookupArtistCountryMB(artistName);
     if (!country) continue;
-
     found++;
-    // Add to ARTIST_COUNTRIES so future runs use it
     ARTIST_COUNTRIES[artistName] = country;
 
-    // Update countryTracks
     if (!window._globeCountryTracks) continue;
     if (!window._globeCountryTracks[country]) window._globeCountryTracks[country] = [];
     tracks.forEach(t => {
       if (!window._globeCountryTracks[country].find(x=>x.id===t.id))
         window._globeCountryTracks[country].push(t);
     });
+    // Also add to the all-tracks snapshot
+    if (!window._globeAllCountryTracks) window._globeAllCountryTracks = {};
+    if (!window._globeAllCountryTracks[country]) window._globeAllCountryTracks[country] = [];
+    tracks.forEach(t => {
+      const yr = parseInt(t.album?.release_date?.split('-')[0])||0;
+      if (!window._globeAllCountryTracks[country].find(x=>x.id===t.id))
+        window._globeAllCountryTracks[country].push({id:t.id, year:yr});
+    });
 
-    // Update the globe markers
     const sortedNew = Object.entries(window._globeCountryTracks).sort((a,b)=>b[1].length-a[1].length);
     updateGlobeMarkers(window._globeCountryTracks);
 
     // Update chips
     const chips = document.getElementById('country-chips');
     if (chips) {
-      chips.innerHTML = sortedNew.map(([code,trs])=>`
-        <div onclick="highlightCountryByCode('${code}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+      chips.innerHTML = sortedNew.map(([code,trs]) => `
+        <div onclick="highlightCountryByCode('${code}')"
+             style="background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                    padding:.4rem .875rem;cursor:pointer;transition:all .2s;font-size:.82rem;"
+             onmouseover="this.style.borderColor='var(--green)'"
+             onmouseout="this.style.borderColor='var(--border)'">
           ${COUNTRY_FLAGS[code]||'🌐'} ${COUNTRY_NAMES[code]||code}
           <span style="font-family:'JetBrains Mono',monospace;color:var(--green);margin-left:.4rem;">${trs.length}</span>
         </div>`).join('');
     }
 
-    // Update status
-    if (statusEl) statusEl.textContent = `🔍 Buscando países... ${i+1}/${unknownEntries.length} (${found} encontrados)`;
+    if (statusEl) statusEl.textContent = `🔍 MusicBrainz: ${i+1}/${unknownEntries.length} buscados · ${found} encontrados`;
 
-    // Remove from unknown list if found
-    const row = document.getElementById(`unknown-row-${CSS.escape(artistName)}`);
-    if (row) row.style.opacity = '0.3';
+    const row = document.getElementById(`unknown-row-${artistName.replace(/[^a-zA-Z0-9]/g,'_')}`);
+    if (row) row.style.opacity = '0.25';
   }
 
   if (statusEl) {
     statusEl.textContent = found > 0
-      ? `✅ MusicBrainz: ${found} artistas nuevos identificados`
-      : `ℹ️ No se encontraron países adicionales`;
-    setTimeout(() => { if(statusEl) statusEl.style.opacity='0'; }, 4000);
+      ? `✅ +${found} países nuevos identificados por MusicBrainz`
+      : `ℹ️ MusicBrainz no encontró países adicionales`;
+    setTimeout(() => { if(statusEl) statusEl.style.opacity='0'; }, 5000);
   }
 }
 
 function toggleUnknown() {
-  const list = document.getElementById('unknown-list');
+  const list  = document.getElementById('unknown-list');
   const arrow = document.getElementById('unknown-arrow');
   if (!list) return;
   const open = list.style.display === 'block';
-  list.style.display = open ? 'none' : 'block';
-  arrow.style.transform = open ? '' : 'rotate(180deg)';
+  list.style.display   = open ? 'none' : 'block';
+  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
 }
 
-function updateYearFilter() {
-  const minEl = document.getElementById('year-min');
-  const maxEl = document.getElementById('year-max');
-  if (!minEl || !maxEl) return;
-  let minV = parseInt(minEl.value), maxV = parseInt(maxEl.value);
-  if (minV > maxV) { [minV, maxV] = [maxV, minV]; }
-  document.getElementById('year-range-label').textContent = `${minV} — ${maxV}`;
-  updateYearFill();
-
-  // Re-filter countryTracks based on year
-  const base = window._globeAllCountryTracks;
-  if (!base) return;
-  const filtered = {};
-  Object.entries(base).forEach(([code, items]) => {
-    const f = items.filter(i => i.year >= minV && i.year <= maxV);
-    if (f.length > 0) {
-      filtered[code] = f.map(i => tracksData.find(t=>t.id===i.id)).filter(Boolean);
-    }
-  });
-  window._globeCountryTracks = filtered;
-  updateGlobeMarkers(filtered);
-}
-
-function updateYearFill() {
-  const minEl = document.getElementById('year-min');
-  const maxEl = document.getElementById('year-max');
-  const fill = document.getElementById('year-track-fill');
-  if (!minEl||!maxEl||!fill) return;
-  const min = parseInt(minEl.min), max = parseInt(minEl.max);
-  const vMin = parseInt(minEl.value), vMax = parseInt(maxEl.value);
-  const pMin = (Math.min(vMin,vMax)-min)/(max-min)*100;
-  const pMax = (Math.max(vMin,vMax)-min)/(max-min)*100;
-  fill.style.left = pMin+'%';
-  fill.style.width = (pMax-pMin)+'%';
-}
-
+/* ── Globe init / build ───────────────────────── */
 function initGlobe(countryTracks, sorted) {
   if (typeof THREE === 'undefined') {
     const s = document.createElement('script');
@@ -1951,161 +2009,216 @@ function initGlobe(countryTracks, sorted) {
   }
 }
 
-let _globeGroup = null;
-let _markerMeshes = []; // {mesh, code, tracks}
+let _globeGroup    = null;
+let _markerMeshes  = [];
 
 function buildGlobe(countryTracks, sorted) {
-  console.log('[Globe] buildGlobe called, sorted countries:', sorted.length, sorted.map(s=>s[0]));
   const canvas = document.getElementById('globe-canvas');
-  if (!canvas) { console.error('[Globe] canvas not found!'); return; }
+  if (!canvas) return;
   const W = canvas.parentElement.clientWidth;
   const H = Math.min(W * 0.75, 520);
-  canvas.width = W;
+  canvas.width  = W;
   canvas.height = H;
 
-  const scene = new THREE.Scene();
+  const scene  = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, W/H, 0.1, 1000);
   camera.position.z = 2.7;
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
   renderer.setSize(W, H);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
   renderer.setClearColor(0x000000, 0);
   window._globeRenderer = renderer;
-  window._globeScene = scene;
-  window._globeCamera = camera;
+  window._globeCamera   = camera;
 
-  // Stars background
-  const sv = [];
-  for (let i=0;i<2000;i++) sv.push((Math.random()-.5)*200,(Math.random()-.5)*200,(Math.random()-.5)*200);
-  const sg = new THREE.BufferGeometry();
-  sg.setAttribute('position', new THREE.Float32BufferAttribute(sv,3));
-  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0xffffff,size:.1,transparent:true,opacity:.45})));
+  // Stars
+  const sv=[]; for(let i=0;i<2000;i++) sv.push((Math.random()-.5)*200,(Math.random()-.5)*200,(Math.random()-.5)*200);
+  const sg=new THREE.BufferGeometry(); sg.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
+  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:.09,transparent:true,opacity:.35})));
 
   const globeGroup = new THREE.Group();
   scene.add(globeGroup);
   _globeGroup = globeGroup;
   globeGroup.rotation.y = -0.5;
 
-  // Ocean
-  const oceanMat = new THREE.MeshPhongMaterial({color:0x071d3a,emissive:0x030d1a,specular:0x1DB954,shininess:25});
-  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1,64,64), oceanMat));
+  // Ocean sphere
+  globeGroup.add(new THREE.Mesh(
+    new THREE.SphereGeometry(1,64,64),
+    new THREE.MeshPhongMaterial({color:0x071d3a,emissive:0x020e22,specular:0x1DB954,shininess:18})
+  ));
 
-  // Subtle lat/lon grid
-  const wMat = new THREE.MeshBasicMaterial({color:0x1DB954,wireframe:true,transparent:true,opacity:0.035});
-  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.001,18,18), wMat));
-
-  // Thin atmosphere rim
-  const atmMat = new THREE.MeshPhongMaterial({color:0x38bdf8,transparent:true,opacity:0.04,side:THREE.BackSide});
-  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.07,48,48), atmMat));
+  // Atmosphere glow
+  globeGroup.add(new THREE.Mesh(
+    new THREE.SphereGeometry(1.07,48,48),
+    new THREE.MeshPhongMaterial({color:0x38bdf8,transparent:true,opacity:0.04,side:THREE.BackSide})
+  ));
 
   // Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.45));
-  const dl = new THREE.DirectionalLight(0xaaffcc, 1.1);
-  dl.position.set(4,2,3); scene.add(dl);
+  scene.add(new THREE.AmbientLight(0xffffff,0.5));
+  const dl=new THREE.DirectionalLight(0xaaffcc,1.1); dl.position.set(4,2,3); scene.add(dl);
 
-  // Helper: lat/lon -> 3D position on sphere surface
-  function ll2v(lat,lon,r=1.012) {
+  // ── lat/lon → Vec3 ──────────────────────────────────────
+  function ll2v(lat,lon,r=1.002){
     const phi=(90-lat)*Math.PI/180, th=(lon+180)*Math.PI/180;
-    return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(th));
+    return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(th));
   }
 
+  // ── Draw country borders from GeoJSON ───────────────────
+  // We'll store a map: ISO2 code -> THREE.LineSegments mesh so we can color them
+  window._countryBorderMeshes = {};   // code -> mesh
+  window._countryFillMeshes   = {};   // code -> mesh (filled polygon)
+
+  const ACTIVE_CODES = new Set(sorted.map(s=>s[0]));
+  const COLORS = [0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0x34d399,0x818cf8,0xfb923c];
+  const sortedIdx = Object.fromEntries(sorted.map(([c],i)=>[c,i]));
+
+  // Helper: project a GeoJSON polygon ring onto the sphere
+  function ringToPoints(coords) {
+    const pts = [];
+    for (let i=0;i<coords.length-1;i++) {
+      const [lo0,la0]=coords[i], [lo1,la1]=coords[i+1];
+      // Subdivide long edges to follow sphere curvature
+      const steps = Math.ceil(Math.hypot(lo1-lo0,la1-la0)*0.5)+1;
+      for(let s=0;s<steps;s++){
+        const t=s/steps;
+        pts.push(ll2v(la0+(la1-la0)*t, lo0+(lo1-lo0)*t, 1.003));
+        pts.push(ll2v(la0+(la1-la0)*(t+1/steps), lo0+(lo1-lo0)*(t+1/steps), 1.003));
+      }
+    }
+    return pts;
+  }
+
+  function drawCountryBorders(geojson) {
+    geojson.features.forEach(feature => {
+      const iso = feature.properties?.ISO_A2 || feature.properties?.iso_a2 || '';
+      if (!iso || iso==='-1' || iso==='') return;
+
+      const isActive = ACTIVE_CODES.has(iso);
+      const idx      = sortedIdx[iso] ?? -1;
+      const col      = isActive ? COLORS[idx % COLORS.length] : 0x1a3a5c;
+      const opacity  = isActive ? 0.85 : 0.18;
+
+      const geom = feature.geometry;
+      const polys = geom.type==='Polygon' ? [geom.coordinates] : geom.coordinates;
+      const linePoints = [];
+
+      polys.forEach(poly => {
+        poly.forEach(ring => {
+          linePoints.push(...ringToPoints(ring));
+        });
+      });
+
+      if (!linePoints.length) return;
+
+      const geo = new THREE.BufferGeometry();
+      const flat = [];
+      linePoints.forEach(p=>{flat.push(p.x,p.y,p.z);});
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(flat,3));
+
+      const mat  = new THREE.LineBasicMaterial({color:col, transparent:true, opacity});
+      const mesh = new THREE.LineSegments(geo, mat);
+      mesh._cc   = iso;
+      globeGroup.add(mesh);
+
+      if (!window._countryBorderMeshes[iso]) window._countryBorderMeshes[iso]=[];
+      window._countryBorderMeshes[iso].push(mesh);
+    });
+  }
+
+  // Fetch GeoJSON — low resolution (110m) is fast and enough
+  const GEOJSON_URL = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson';
+  fetch(GEOJSON_URL)
+    .then(r=>r.json())
+    .then(gj=>{
+      drawCountryBorders(gj);
+      // Store for epoch filtering updates
+      window._globeGeoJSON = gj;
+    })
+    .catch(()=>{
+      // Fallback: tiny lat/lon grid so globe isn't empty
+      const wMat=new THREE.MeshBasicMaterial({color:0x1DB954,wireframe:true,transparent:true,opacity:0.06});
+      globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.001,24,24),wMat));
+    });
+
+  // ── Country dot markers (small, on top of borders) ──────
   _markerMeshes = [];
   const maxCount = sorted[0]?.[1]?.length||1;
-  const COLORS = [0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0x34d399,0x818cf8,0xfb923c];
 
-  sorted.forEach(([code,tracks],idx) => {
-    const coords = COUNTRY_COORDS[code];
-    if (!coords) return;
-    const pos = ll2v(coords[0], coords[1]);
+  sorted.forEach(([code,tracks],idx)=>{
+    const coords=COUNTRY_COORDS[code]; if(!coords) return;
+    const pos  = ll2v(coords[0],coords[1],1.018);
     const norm = pos.clone().normalize();
-    const col = COLORS[idx % COLORS.length];
-    const sz = 0.013 + (tracks.length/maxCount)*0.018; // small dot, scales with count
+    const col  = COLORS[idx%COLORS.length];
+    const sz   = 0.011 + (tracks.length/maxCount)*0.014;
 
-    // Main glowing dot
-    const dotGeo = new THREE.SphereGeometry(sz, 12, 12);
-    const dotMat = new THREE.MeshBasicMaterial({color: col});
-    const dot = new THREE.Mesh(dotGeo, dotMat);
-    dot.position.copy(pos);
-    dot._cc = code; dot._tr = tracks;
+    const dot=new THREE.Mesh(new THREE.SphereGeometry(sz,10,10),new THREE.MeshBasicMaterial({color:col}));
+    dot.position.copy(pos); dot._cc=code; dot._tr=tracks;
     globeGroup.add(dot);
-    _markerMeshes.push({mesh:dot, code, tracks, baseColor:col, baseSize:sz});
+    _markerMeshes.push({mesh:dot,code,tracks,isHalo:false,col});
 
-    // Thin halo ring (tight, not intrusive)
-    const haloR = sz * 2.2;
-    const haloGeo = new THREE.RingGeometry(haloR, haloR*1.25, 32);
-    const haloMat = new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.5,side:THREE.DoubleSide});
-    const halo = new THREE.Mesh(haloGeo, haloMat);
+    // Tight halo
+    const hr=sz*2.1;
+    const halo=new THREE.Mesh(
+      new THREE.RingGeometry(hr,hr*1.35,28),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.55,side:THREE.DoubleSide})
+    );
     halo.position.copy(pos);
-    halo.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), norm);
-    halo._cc = code; halo._tr = tracks;
+    halo.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),norm);
+    halo._cc=code; halo._tr=tracks;
     globeGroup.add(halo);
-    _markerMeshes.push({mesh:halo, code, tracks, isHalo:true, baseColor:col});
+    _markerMeshes.push({mesh:halo,code,tracks,isHalo:true,col});
   });
 
-  // Raycaster
-  const raycaster = new THREE.Raycaster();
-  raycaster.params.Mesh = {threshold:0.02};
-  const mouse = new THREE.Vector2(-999,-999);
-  const allMeshes = _markerMeshes.map(m=>m.mesh);
+  // ── Raycaster ────────────────────────────────────────────
+  const raycaster=new THREE.Raycaster();
+  const mouse=new THREE.Vector2(-999,-999);
+  const allMeshes=_markerMeshes.map(m=>m.mesh);
 
-  let animId;
-  const animate = () => {
-    animId = requestAnimationFrame(animate);
-    const t = Date.now()*0.0018;
-    // Pulse halos
+  let hoveredCode=null;
+  const animate=()=>{
+    requestAnimationFrame(animate);
+    const t=Date.now()*0.0018;
     _markerMeshes.forEach((m,i)=>{
-      if (m.isHalo) {
-        const p = 1 + Math.sin(t + i*0.9)*0.18;
-        m.mesh.scale.setScalar(p);
-        m.mesh.material.opacity = 0.35 + Math.sin(t+i*0.9)*0.15;
+      if(m.isHalo){
+        m.mesh.scale.setScalar(1+Math.sin(t+i*0.85)*0.2);
+        m.mesh.material.opacity=0.4+Math.sin(t+i*0.85)*0.15;
       }
     });
-    // Hover — use recursive:true so it finds children inside the group
-    raycaster.setFromCamera(mouse, camera);
-    const hits = raycaster.intersectObjects(allMeshes, false);
-    if (hits.length) {
-      const obj = hits[0].object;
-      const code = obj._cc;
-      if (code) {
-        if (code !== hoveredCountry) {
-          hoveredCountry = code;
-          showCountryCard(code, obj._tr);
-          const tt = document.getElementById('globe-tooltip');
-          if (tt) tt.textContent = (COUNTRY_FLAGS[code]||'') + ' ' + (COUNTRY_NAMES[code]||code);
-        }
+    raycaster.setFromCamera(mouse,camera);
+    const hits=raycaster.intersectObjects(allMeshes,false);
+    if(hits.length){
+      const code=hits[0].object._cc;
+      if(code&&code!==hoveredCode){
+        hoveredCode=code; hoveredCountry=code;
+        const trs=hits[0].object._tr||window._globeCountryTracks?.[code]||[];
+        showCountryCard(code,trs);
+        const tt=document.getElementById('globe-tooltip');
+        if(tt) tt.textContent=(COUNTRY_FLAGS[code]||'')+' '+(COUNTRY_NAMES[code]||code);
       }
-    } else {
-      // Reset so re-hovering same country works after moving away
-      hoveredCountry = null;
-    }
-    renderer.render(scene, camera);
+    } else { hoveredCode=null; hoveredCountry=null; }
+    renderer.render(scene,camera);
   };
   animate();
 
-  // Drag to rotate (manual only — no auto spin)
-  let dragging=false, px={x:0,y:0};
-  canvas.addEventListener('mousedown', e=>{ dragging=true; px={x:e.clientX,y:e.clientY}; canvas.style.cursor='grabbing'; });
-  window.addEventListener('mouseup', ()=>{ dragging=false; if(canvas) canvas.style.cursor='grab'; });
-  window.addEventListener('mousemove', e=>{
-    // Always update mouse for hover detection
-    const rect = canvas.getBoundingClientRect();
-    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-      mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
-      mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
-    } else {
-      mouse.set(-999,-999);
-    }
-    if (!dragging) return;
-    globeGroup.rotation.y += (e.clientX-px.x)*0.007;
-    globeGroup.rotation.x = Math.max(-1.2,Math.min(1.2, globeGroup.rotation.x+(e.clientY-px.y)*0.007));
+  // Drag — manual only
+  let dragging=false,px={x:0,y:0};
+  canvas.addEventListener('mousedown',e=>{dragging=true;px={x:e.clientX,y:e.clientY};canvas.style.cursor='grabbing';});
+  window.addEventListener('mouseup',()=>{dragging=false;if(canvas)canvas.style.cursor='grab';});
+  window.addEventListener('mousemove',e=>{
+    const rect=canvas.getBoundingClientRect();
+    if(e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom){
+      mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+      mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+    } else { mouse.set(-999,-999); }
+    if(!dragging) return;
+    globeGroup.rotation.y+=(e.clientX-px.x)*0.007;
+    globeGroup.rotation.x=Math.max(-1.2,Math.min(1.2,globeGroup.rotation.x+(e.clientY-px.y)*0.007));
     px={x:e.clientX,y:e.clientY};
   });
-  // mouse reset handled in mousemove bounds check
-  canvas.addEventListener('touchstart',e=>{ dragging=true; px={x:e.touches[0].clientX,y:e.touches[0].clientY}; },{passive:true});
+  canvas.addEventListener('touchstart',e=>{dragging=true;px={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
   canvas.addEventListener('touchend',()=>dragging=false,{passive:true});
   canvas.addEventListener('touchmove',e=>{
-    if(!dragging) return;
+    if(!dragging)return;
     globeGroup.rotation.y+=(e.touches[0].clientX-px.x)*0.007;
     globeGroup.rotation.x=Math.max(-1.2,Math.min(1.2,globeGroup.rotation.x+(e.touches[0].clientY-px.y)*0.007));
     px={x:e.touches[0].clientX,y:e.touches[0].clientY};
@@ -2113,90 +2226,170 @@ function buildGlobe(countryTracks, sorted) {
 }
 
 function updateGlobeMarkers(filteredCountryTracks) {
-  if (!_globeGroup || !_markerMeshes.length) return;
-  const sorted = Object.entries(filteredCountryTracks).sort((a,b)=>b[1].length-a[1].length);
-  const maxCount = sorted[0]?.[1]?.length||1;
-  const COLORS = [0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0x34d399,0x818cf8,0xfb923c];
-  const sortedIdx = Object.fromEntries(sorted.map(([c],i)=>[c,i]));
+  if (!_globeGroup) return;
+  const sortedF  = Object.entries(filteredCountryTracks).sort((a,b)=>b[1].length-a[1].length);
+  const maxCount = sortedF[0]?.[1]?.length||1;
+  const COLORS   = [0x1DB954,0x38bdf8,0xc084fc,0xfbbf24,0xf87171,0x34d399,0x818cf8,0xfb923c];
+  const idxMap   = Object.fromEntries(sortedF.map(([c],i)=>[c,i]));
+  const activeCodes = new Set(Object.keys(filteredCountryTracks));
 
-  _markerMeshes.forEach(m => {
-    const ft = filteredCountryTracks[m.code];
-    if (!ft || ft.length===0) {
-      m.mesh.material.opacity = 0;
-      m.mesh.scale.setScalar(0.01);
+  // ── Update border line colors ──────────────────────────
+  if (window._countryBorderMeshes) {
+    Object.entries(window._countryBorderMeshes).forEach(([code, meshes]) => {
+      const isActive = activeCodes.has(code);
+      const idx      = idxMap[code] ?? -1;
+      const col      = isActive ? COLORS[idx % COLORS.length] : 0x1a3a5c;
+      const opacity  = isActive ? 0.85 : 0.18;
+      meshes.forEach(m => {
+        m.material.color.setHex(col);
+        m.material.opacity = opacity;
+      });
+    });
+  }
+
+  // ── Re-draw borders for newly discovered countries ─────
+  if (window._globeGeoJSON && typeof THREE !== 'undefined') {
+    const knownBorders = new Set(Object.keys(window._countryBorderMeshes||{}));
+    sortedF.forEach(([code]) => {
+      if (knownBorders.has(code)) return;
+      const feature = window._globeGeoJSON.features.find(f =>
+        (f.properties?.ISO_A2||f.properties?.iso_a2||'') === code
+      );
+      if (!feature) return;
+      function ll2v3(lat,lon,r=1.003){
+        const phi=(90-lat)*Math.PI/180,th=(lon+180)*Math.PI/180;
+        return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(th));
+      }
+      function ringPts(coords){
+        const pts=[];
+        for(let i=0;i<coords.length-1;i++){
+          const [lo0,la0]=coords[i],[lo1,la1]=coords[i+1];
+          const steps=Math.ceil(Math.hypot(lo1-lo0,la1-la0)*0.5)+1;
+          for(let s=0;s<steps;s++){
+            const t=s/steps;
+            pts.push(ll2v3(la0+(la1-la0)*t,lo0+(lo1-lo0)*t));
+            pts.push(ll2v3(la0+(la1-la0)*(t+1/steps),lo0+(lo1-lo0)*(t+1/steps)));
+          }
+        }
+        return pts;
+      }
+      const idx=idxMap[code]??0;
+      const col=COLORS[idx%COLORS.length];
+      const polys=feature.geometry.type==='Polygon'?[feature.geometry.coordinates]:feature.geometry.coordinates;
+      const pts=[];
+      polys.forEach(poly=>poly.forEach(ring=>pts.push(...ringPts(ring))));
+      if(!pts.length) return;
+      const geo=new THREE.BufferGeometry();
+      const flat=[]; pts.forEach(p=>{flat.push(p.x,p.y,p.z);});
+      geo.setAttribute('position',new THREE.Float32BufferAttribute(flat,3));
+      const mesh=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:col,transparent:true,opacity:0.85}));
+      mesh._cc=code; _globeGroup.add(mesh);
+      if(!window._countryBorderMeshes[code]) window._countryBorderMeshes[code]=[];
+      window._countryBorderMeshes[code].push(mesh);
+    });
+  }
+
+  // ── Update dot markers ─────────────────────────────────
+  const knownCodes = new Set(_markerMeshes.map(m=>m.code));
+  sortedF.forEach(([code,tracks],idx)=>{
+    if(knownCodes.has(code)) return;
+    const coords=COUNTRY_COORDS[code]; if(!coords||typeof THREE==='undefined') return;
+    function ll2v4(lat,lon,r=1.018){
+      const phi=(90-lat)*Math.PI/180,th=(lon+180)*Math.PI/180;
+      return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(th));
+    }
+    const pos=ll2v4(coords[0],coords[1]); const norm=pos.clone().normalize();
+    const col=COLORS[idx%COLORS.length];
+    const sz=0.011+(tracks.length/maxCount)*0.014;
+    const dot=new THREE.Mesh(new THREE.SphereGeometry(sz,10,10),new THREE.MeshBasicMaterial({color:col}));
+    dot.position.copy(pos); dot._cc=code; dot._tr=tracks;
+    _globeGroup.add(dot); _markerMeshes.push({mesh:dot,code,tracks,isHalo:false,col});
+    const hr=sz*2.1;
+    const halo=new THREE.Mesh(new THREE.RingGeometry(hr,hr*1.35,28),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.55,side:THREE.DoubleSide}));
+    halo.position.copy(pos); halo.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),norm);
+    halo._cc=code; halo._tr=tracks; _globeGroup.add(halo);
+    _markerMeshes.push({mesh:halo,code,tracks,isHalo:true,col});
+  });
+
+  _markerMeshes.forEach(m=>{
+    const ft=filteredCountryTracks[m.code];
+    if(!ft||!ft.length){
+      m.mesh.scale.setScalar(0.001); m.mesh.material.opacity=0;
     } else {
-      const idx = sortedIdx[m.code]??8;
-      const col = COLORS[idx%COLORS.length];
-      m.mesh.material.color?.setHex(col);
+      const i=idxMap[m.code]??8;
+      m.mesh.material.color?.setHex(COLORS[i%COLORS.length]);
       m.mesh.scale.setScalar(1);
-      if (!m.isHalo) m.mesh.material.opacity = 1;
-      m.mesh._tr = ft;
+      if(!m.isHalo) m.mesh.material.opacity=1;
+      m.mesh._tr=ft;
     }
   });
 }
 
 function showCountryCard(code, tracks) {
-  const flag = COUNTRY_FLAGS[code]||'🌐';
-  const name = COUNTRY_NAMES[code]||code;
-  const artists = [...new Set(tracks.map(t=>t.artists[0]?.name))].slice(0,4);
-  const topTrack = tracks[0];
-  const cover = topTrack?.album?.images?.[1]?.url||topTrack?.album?.images?.[0]?.url;
-  const listeners = topTrack ? (topTrack._listeners?formatNum(topTrack._listeners):formatNum(Math.round(1000*Math.exp((topTrack.popularity||0)*0.115)))) : '—';
-  const yr = topTrack?.album?.release_date?.split('-')[0]||'—';
+  if (!tracks || !tracks.length) return;
+  const flag = COUNTRY_FLAGS[code] || '🌐';
+  const name = COUNTRY_NAMES[code] || code;
+  const card = document.getElementById('country-card');
+  if (!card) return;
 
-  document.getElementById('country-card').innerHTML = `
-    <div style="width:100%;">
-      <div style="
-        background:linear-gradient(145deg,#111827 0%,#0d1117 60%,#0f2318 100%);
-        border:2px solid var(--green);
-        border-radius:18px;
-        padding:1.25rem;
-        position:relative;
-        overflow:hidden;
-        box-shadow:0 0 40px rgba(29,185,84,.25),inset 0 0 40px rgba(29,185,84,.04);
-      ">
-        <div style="position:absolute;top:-60%;left:-60%;width:220%;height:220%;background:conic-gradient(transparent 20%,rgba(29,185,84,.04) 50%,transparent 80%);animation:spin-slow 8s linear infinite;pointer-events:none;"></div>
-        <style>@keyframes spin-slow{to{transform:rotate(360deg)}}</style>
+  // Sort by rank in user's top list
+  const sorted = [...tracks].sort((a,b) =>
+    tracksData.indexOf(a) - tracksData.indexOf(b)
+  );
 
-        <!-- Header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-          <div style="font-size:2.8rem;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5))">${flag}</div>
-          <div style="text-align:right;">
-            <div style="font-size:.6rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--green);margin-bottom:.2rem;">ORIGEN MUSICAL</div>
-            <div style="font-size:1.1rem;font-weight:800;letter-spacing:-.03em;">${name}</div>
-            <div style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${tracks.length} canción${tracks.length>1?'es':''}</div>
-          </div>
-        </div>
-
-        <!-- Cover -->
-        ${cover?`
-          <div style="border-radius:12px;overflow:hidden;margin-bottom:1rem;border:1px solid rgba(29,185,84,.25);box-shadow:0 4px 20px rgba(0,0,0,.4)">
-            <img src="${cover}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
-          </div>`:`
-          <div style="height:140px;background:var(--green-dim);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;margin-bottom:1rem;">🎵</div>`}
-
-        <!-- Track name -->
-        <div style="font-size:.98rem;font-weight:800;letter-spacing:-.02em;margin-bottom:.2rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(topTrack?.name||'—')}</div>
-        <div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:1rem;">${escHtml(topTrack?.artists?.[0]?.name||'—')} · ${yr}</div>
-
-        <!-- Stats -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:1rem;">
-          ${[['🎵',tracks.length,'canciones'],['👥',listeners,'oyentes'],['🥁',topTrack?._audio?.bpm||'—','BPM']].map(([ic,v,l])=>`
-            <div style="background:rgba(29,185,84,.08);border:1px solid rgba(29,185,84,.18);border-radius:10px;padding:.5rem;text-align:center;">
-              <div style="font-size:.9rem;">${ic}</div>
-              <div style="font-size:.88rem;font-weight:800;color:var(--green);line-height:1.1;">${v}</div>
-              <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">${l}</div>
-            </div>`).join('')}
-        </div>
-
-        <!-- Artists -->
-        <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:.75rem;font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);line-height:1.6;">
-          🎤 ${artists.map(a=>escHtml(a)).join(' · ')}${tracks.length>4?` <span style="color:var(--green)">+${tracks.length-4} más</span>`:''}
-        </div>
+  card.style.justifyContent = 'flex-start';
+  card.style.alignItems     = 'stretch';
+  card.innerHTML = `
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-shrink:0;">
+      <span style="font-size:2.2rem;line-height:1;">${flag}</span>
+      <div>
+        <div style="font-size:.55rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--green);">ORIGEN MUSICAL</div>
+        <div style="font-size:1rem;font-weight:800;letter-spacing:-.03em;">${name}</div>
+        <div style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${sorted.length} canción${sorted.length>1?'es':''}</div>
       </div>
+    </div>
+
+    <!-- Scrollable track list -->
+    <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:.5rem;
+                scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+                padding-right:.25rem;">
+      ${sorted.map((t, i) => {
+        const cover = t.album?.images?.[2]?.url || t.album?.images?.[0]?.url;
+        const rank  = tracksData.indexOf(t) + 1;
+        const yr    = t.album?.release_date?.split('-')[0] || '—';
+        const mins  = Math.floor(t.duration_ms/60000);
+        const secs  = Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
+        const bpm   = t._audio?.bpm || '—';
+        return `
+        <div style="display:flex;align-items:center;gap:.625rem;padding:.5rem .625rem;
+                    border-radius:10px;border:1px solid var(--border);
+                    background:${i===0?'rgba(29,185,84,.07)':'var(--bg)'};
+                    transition:background .15s;flex-shrink:0;"
+             onmouseover="this.style.background='rgba(29,185,84,.1)'"
+             onmouseout="this.style.background='${i===0?'rgba(29,185,84,.07)':'var(--bg)'}'">
+          <!-- Cover -->
+          ${cover
+            ? `<img src="${cover}" style="width:42px;height:42px;border-radius:7px;object-fit:cover;flex-shrink:0;">`
+            : `<div style="width:42px;height:42px;border-radius:7px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.9rem;">♪</div>`}
+          <!-- Info -->
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.name)}</div>
+            <div style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${escHtml(t.artists[0]?.name||'')} · ${yr}
+            </div>
+          </div>
+          <!-- Rank + BPM -->
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--green);font-weight:700;">#${rank}</div>
+            <div style="font-size:.6rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${bpm} BPM</div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>
   `;
 }
+
 
 function highlightCountryByCode(code) {
   if (!window._globeCountryTracks) return;
