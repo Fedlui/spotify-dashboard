@@ -796,9 +796,9 @@
     </div>
     <div id="records-tab" class="hidden">
       <div id="records-content"></div>
+    </div>
     <div id="average-tab" class="hidden">
       <div id="average-content"></div>
-    </div>
     </div>
   </div>
 </div>
@@ -3519,22 +3519,25 @@ function renderRecords() {
 let averageRendered = false;
 
 function renderAverage() {
-  // Don't cache — always recompute (data loads async after tabs are shown)
+  console.log('[Average] renderAverage called, tracksData.length=', tracksData.length);
   const el = document.getElementById('average-content');
-  if (!el) return;
+  console.log('[Average] el=', el);
+  if (!el) { console.error('[Average] average-content NOT FOUND'); return; }
+  const tab = document.getElementById('average-tab');
+  console.log('[Average] average-tab=', tab, 'hidden=', tab?.classList.contains('hidden'));
   if (!tracksData.length) {
     el.innerHTML = '<p style="color:var(--muted);padding:2rem;font-family:JetBrains Mono,monospace;">Cargando datos...</p>';
     return;
   }
-  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:3rem;">
-    <div class="spinner"></div><span style="margin-left:1rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Calculando promedios...</span>
-  </div>`;
-  setTimeout(() => buildAverage(el), 80);
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:3rem;"><div class="spinner"></div><span style="margin-left:1rem;font-family:\'JetBrains Mono\',monospace;color:var(--muted);">Calculando promedios...</span></div>';
+  setTimeout(() => { console.log('[Average] calling buildAverage'); buildAverage(el); }, 80);
 }
 
 function buildAverage(el) {
+  console.log('[Average] buildAverage start, T.length=', tracksData.length);
   const T = tracksData;
   if (!T.length) { el.innerHTML = '<p style="color:var(--muted);padding:2rem;font-family:JetBrains Mono,monospace;">Sin datos aún — espera a que carguen las canciones.</p>'; return; }
+  try {
 
   // ── Helpers ───────────────────────────────────────────────────────
   const avg  = fn => T.reduce((s,t) => s + (fn(t)||0), 0) / T.length;
@@ -3778,6 +3781,11 @@ function buildAverage(el) {
 
     + '</div>' // end right column
     + '</div>'; // end grid
+  console.log('[Average] buildAverage done, innerHTML length=', el.innerHTML.length);
+  } catch(err) {
+    console.error('[Average] ERROR in buildAverage:', err);
+    el.innerHTML = '<div style="padding:2rem;background:rgba(248,113,113,.1);border:1px solid var(--red);border-radius:12px;font-family:JetBrains Mono,monospace;font-size:.8rem;color:var(--red);">Error: ' + err.message + '<br><pre style="margin-top:.5rem;font-size:.7rem;white-space:pre-wrap;">' + err.stack + '</pre></div>';
+  }
 }
 
 
