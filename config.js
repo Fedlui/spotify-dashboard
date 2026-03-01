@@ -16,7 +16,7 @@ window._APP_CONFIG = {
   allowedEmails: [
     'salazarfederio05@gmail.com',
     'profe@ejemplo.com',
-    'papa@ejemplo.com',
+    'federicolsalazar@gmail.com',
   ],
 
 };
