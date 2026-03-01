@@ -15,8 +15,8 @@ window._APP_CONFIG = {
   // Recuerda que también deben estar en User Management en Spotify Developer.
   allowedEmails: [
     'salazarfederio05@gmail.com',
-    'profe@ejemplo.com',
     'federicolsalazar@gmail.com',
+    'profe@ejemplo.com',
   ],
 
 };
