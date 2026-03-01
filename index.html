@@ -971,6 +971,10 @@ function checkConsentReady() {
   const notAuth   = document.getElementById('consent-not-auth');
   const acceptWrap= document.getElementById('consent-accept-wrap');
 
+  // Debug: show what config loaded
+  const configLoaded = typeof _APP_CONFIG !== 'undefined';
+  const loadedEmails = configLoaded ? (ALLOWED_EMAILS||[]) : [];
+
   const validFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   // No input yet
@@ -998,7 +1002,18 @@ function checkConsentReady() {
 
   if (!isAllowed) {
     if (hint)       { hint.textContent=''; }
-    if (notAuth)    notAuth.style.display = 'block';
+    if (notAuth)    {
+      notAuth.style.display = 'block';
+      notAuth.innerHTML = '<div style="font-size:.72rem;font-weight:700;color:var(--yellow);margin-bottom:.3rem;">⚠️ Correo no autorizado</div>'
+        + '<div style="font-size:.72rem;font-family:\'JetBrains Mono\',monospace;color:var(--muted);line-height:1.6;">'
+        + 'Este correo no está en la lista de acceso.<br>'
+        + 'Por favor comparte tu correo de Spotify con el administrador para que te agregue.'
+        + '</div>'
+        + '<div style="margin-top:.5rem;font-size:.62rem;font-family:\'JetBrains Mono\',monospace;color:rgba(255,255,255,.25);">'
+        + 'Config: ' + (configLoaded ? '✓ cargado' : '✗ no encontrado') + ' · '
+        + 'Correos registrados: ' + loadedEmails.length
+        + '</div>';
+    }
     if (acceptWrap) acceptWrap.style.display = 'none';
     if (btn)        { btn.disabled=true; btn.style.opacity='.4'; btn.style.cursor='not-allowed'; }
     if (emailEl)    emailEl.style.borderColor = 'var(--yellow)';
