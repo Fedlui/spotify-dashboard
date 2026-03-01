@@ -796,7 +796,9 @@
     </div>
     <div id="records-tab" class="hidden">
       <div id="records-content"></div>
+    <div id="average-tab" class="hidden">
       <div id="average-content"></div>
+    </div>
     </div>
   </div>
 </div>
@@ -1136,7 +1138,7 @@ function doAuth() {
 }
 
 // ===== TABS =====
-const ALL_TABS = ['tracks','wrapped','recs','gems','evolution','map','session','palette','timeline','records'];
+const ALL_TABS = ['tracks','wrapped','recs','gems','evolution','map','session','palette','timeline','records','average'];
 function showTab(tab, btn) {
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
