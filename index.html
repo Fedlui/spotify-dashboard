@@ -1258,7 +1258,37 @@ async function fetchEnrichedData() {
         sig = Math.random()>0.1 ? '4/4' : '3/4';
         const loudness = (-(3+Math.random()*15)).toFixed(1);
 
-        track._audio = { bpm, key, mode, time_signature:sig, loudness:`${loudness} dB` };
+        // Estimate energy/danceability/valence from genre + popularity
+        const popN = (pop/100);
+        let energy=0.5, dance=0.5, valence=0.5;
+        if (g.includes('reggaeton')||g.includes('latin urban')) { energy=0.82; dance=0.88; valence=0.7; }
+        else if (g.includes('hip hop')||g.includes('rap'))       { energy=0.72; dance=0.76; valence=0.45; }
+        else if (g.includes('trap'))                              { energy=0.78; dance=0.71; valence=0.35; }
+        else if (g.includes('dance')||g.includes('edm')||g.includes('house')) { energy=0.88; dance=0.85; valence=0.65; }
+        else if (g.includes('techno')||g.includes('trance'))     { energy=0.92; dance=0.82; valence=0.5; }
+        else if (g.includes('metal')||g.includes('punk'))        { energy=0.95; dance=0.42; valence=0.3; }
+        else if (g.includes('jazz'))                             { energy=0.42; dance=0.55; valence=0.62; }
+        else if (g.includes('blues')||g.includes('soul'))        { energy=0.48; dance=0.58; valence=0.45; }
+        else if (g.includes('r&b'))                              { energy=0.58; dance=0.72; valence=0.55; }
+        else if (g.includes('pop'))                              { energy=0.65; dance=0.7; valence=0.68; }
+        else if (g.includes('rock'))                             { energy=0.78; dance=0.52; valence=0.48; }
+        else if (g.includes('classical')||g.includes('orchestra')){ energy=0.28; dance=0.25; valence=0.42; }
+        else if (g.includes('cumbia')||g.includes('salsa'))      { energy=0.78; dance=0.88; valence=0.78; }
+        else if (g.includes('balada')||g.includes('romantic'))   { energy=0.32; dance=0.38; valence=0.38; }
+        else { energy=0.55+popN*0.1; dance=0.55+popN*0.08; valence=0.5+popN*0.05; }
+        // Add slight randomness ±0.08
+        const jitter = () => (Math.random()-0.5)*0.16;
+        energy  = Math.max(0.05, Math.min(0.99, energy  + jitter()));
+        dance   = Math.max(0.05, Math.min(0.99, dance   + jitter()));
+        valence = Math.max(0.05, Math.min(0.99, valence + jitter()));
+
+        // key as number 0-11, mode as number 0/1
+        const keyNum  = Math.floor(Math.random()*12);
+        const modeNum = Math.random()>0.4 ? 1 : 0;
+
+        track._audio = { bpm, key:keyNum, mode:modeNum, time_signature:sig,
+                         loudness:`${loudness} dB`,
+                         energy, danceability:dance, valence };
       } catch(e) { track._genres=track._genres||[]; track._audio={}; }
     }));
   }
@@ -3465,18 +3495,17 @@ function renderRecords() {
 let averageRendered = false;
 
 function renderAverage() {
-  if (averageRendered) return;
-  averageRendered = true;
-
+  // Don't cache — always recompute (data loads async after tabs are shown)
   const el = document.getElementById('average-content');
   if (!el) return;
-
+  if (!tracksData.length) {
+    el.innerHTML = '<p style="color:var(--muted);padding:2rem;font-family:JetBrains Mono,monospace;">Cargando datos...</p>';
+    return;
+  }
   el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:3rem;">
     <div class="spinner"></div><span style="margin-left:1rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Calculando promedios...</span>
   </div>`;
-
-  // Small delay so spinner shows before heavy computation
-  setTimeout(() => buildAverage(el), 60);
+  setTimeout(() => buildAverage(el), 80);
 }
 
 function buildAverage(el) {
@@ -3516,15 +3545,16 @@ function buildAverage(el) {
     return '#'+[rT,gT,bT].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
   })();
 
-  // Most common key
-  const keyCounts = {};
-  T.forEach(t => { const k = t._audio?.key; if(k!=null) keyCounts[k]=(keyCounts[k]||0)+1; });
-  const avgKey = Object.entries(keyCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+  // Most common key (stored as number 0-11)
   const KEY_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const keyCounts = {};
+  T.forEach(t => { const k = t._audio?.key; if(k!=null && !isNaN(k)) keyCounts[k]=(keyCounts[k]||0)+1; });
+  const avgKeyNum = Object.entries(keyCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+  const avgKey = avgKeyNum != null ? parseInt(avgKeyNum) : null;
 
-  // Most common mode
-  const modes = T.map(t=>t._audio?.mode).filter(m=>m!=null);
-  const avgMode = modes.filter(m=>m===1).length >= modes.length/2 ? 'Mayor' : 'Menor';
+  // Most common mode (1=Mayor, 0=Menor)
+  const modes = T.map(t=>t._audio?.mode).filter(m=>m!=null && !isNaN(m));
+  const avgMode = modes.length && modes.filter(m=>m===1||m==='1').length >= modes.length/2 ? 'Mayor' : 'Menor';
 
   // Most common genre
   const genreCounts = {};
@@ -3715,8 +3745,8 @@ function buildAverage(el) {
           ${statRow('⏱','Duración',       fmtDur(avgDurMs),         fmtDur(bestTrack?.duration_ms||0))}
           ${statRow('🗓','Año',            Math.round(avgYear),      yr)}
           ${statRow('👥','Oyentes est.',   fmtNum(avgListeners),     fmtNum(bestTrack?._listeners||Math.round(1000*Math.exp((bestTrack?.popularity||0)*0.115))))}
-          ${statRow('🔑','Tonalidad',      avgKey!=null?KEY_NAMES[avgKey]+'':'—', bestTrack?._audio?.key!=null?KEY_NAMES[bestTrack._audio.key]:'—')}
-          ${statRow('🎼','Modo',           avgMode,                  bestTrack?._audio?.mode===1?'Mayor':'Menor')}
+          ${statRow('🔑','Tonalidad',      avgKey!=null?KEY_NAMES[avgKey]:'—', bestTrack?._audio?.key!=null?KEY_NAMES[parseInt(bestTrack._audio.key)]:'—')}
+          ${statRow('🎼','Modo',           avgMode,                  bestTrack?._audio?.mode===1||bestTrack?._audio?.mode==='1'?'Mayor':'Menor')}
           ${statRow('🔈','Volumen',        Math.round(avgLoudness)+' dB', bestTrack?._audio?.loudness||'—')}
         </div>
 
