@@ -483,7 +483,7 @@ function showExportModal(){
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem;">
 <div style="font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);">Campos</div>
 <div style="display:flex;gap:.4rem;"><button onclick="exportSelAll()" style="font-size:.65rem;font-family:JetBrains Mono,monospace;color:var(--green);background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);padding:.2rem .55rem;border-radius:5px;cursor:pointer;">Todo</button><button onclick="exportSelNone()" style="font-size:.65rem;font-family:JetBrains Mono,monospace;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:.2rem .55rem;border-radius:5px;cursor:pointer;">Ninguno</button></div></div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem;">${EXPORT_FIELDS.map(f=>`<label id="ef-lbl-${f.id}" style="display:flex;align-items:center;gap:.5rem;background:var(--surface2);border:1px solid ${_exportSelectedFields.includes(f.id)?'var(--green)':'var(--border)'};border-radius:9px;padding:.5rem .75rem;cursor:pointer;transition:border-color .15s;"><input type="checkbox" data-efield="${f.id}" ${_exportSelectedFields.includes(f.id)?'checked':''} onchange="toggleEF('${f.id}',this.checked)" style="accent-color:var(--green);cursor:pointer;flex-shrink:0;"><span style="font-size:.78rem;">${f.icon}</span><span style="font-size:.68rem;font-weight:600;">${f.label}</span></label>`).join('')}</div></div>
+<div style="display:flex;flex-direction:column;gap:.3rem;">${EXPORT_FIELDS.map(f=>`<label id="ef-lbl-${f.id}" style="display:flex;align-items:center;gap:.625rem;background:var(--surface2);border:1px solid ${_exportSelectedFields.includes(f.id)?'var(--green)':'var(--border)'};border-radius:9px;padding:.5rem .875rem;cursor:pointer;transition:border-color .15s;"><input type="checkbox" data-efield="${f.id}" ${_exportSelectedFields.includes(f.id)?'checked':''} onchange="toggleEF('${f.id}',this.checked)" style="accent-color:var(--green);cursor:pointer;flex-shrink:0;"><span style="font-size:.88rem;flex-shrink:0;">${f.icon}</span><span style="font-size:.78rem;font-weight:600;flex:1;">${f.label}</span></label>`).join('')}</div></div>
 <div style="padding:.875rem 1.4rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:.625rem;align-items:center;">
 <span id="ef-count" style="font-size:.7rem;font-family:JetBrains Mono,monospace;color:var(--muted);flex:1;">${_exportSelectedFields.length} campos · ${tracksData.length} canciones</span>
 <button onclick="doExportJSON()" style="background:var(--accent2);color:#000;font-family:Syne,sans-serif;font-weight:800;font-size:.82rem;padding:.6rem 1.5rem;border-radius:100px;border:none;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">⬇ Descargar JSON</button></div></div>`;
@@ -495,33 +495,41 @@ function exportSelAll(){EXPORT_FIELDS.forEach(f=>{if(!_exportSelectedFields.incl
 function exportSelNone(){_exportSelectedFields=[];EXPORT_FIELDS.forEach(f=>{const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=false;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--border)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent='0 campos · '+tracksData.length+' canciones';}
 function doExportJSON(){
   const NA='N/A',fields=_exportSelectedFields;if(!fields.length){showToast('⚠ Selecciona al menos un campo');return;}
-  const data=tracksData.map((t,idx)=>{
+
+  // Estructura: cada canción = una fila, cada campo = una columna
+  // Array de objetos: [{campo1:val, campo2:val, ...}, ...]
+  // Así en Excel/Sheets: fila 1 = encabezados, fila 2+ = canciones
+  const rows=tracksData.map((t,idx)=>{
     const mins=Math.floor(t.duration_ms/60000),secs=Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
-    const listeners=t._listeners||(t.popularity!=null?Math.round(1000*Math.exp(t.popularity*.115)):null);const obj={};
-    if(fields.includes('rank'))        obj.posicion_top           =idx+1;
-    if(fields.includes('name'))        obj.nombre                 =t.name||NA;
-    if(fields.includes('artist'))      obj.artista                =t.artists?.map(a=>a.name).join(', ')||NA;
-    if(fields.includes('year'))        obj.ano                    =t.album?.release_date?.split('-')[0]||NA;
-    if(fields.includes('duration'))    {obj.duracion=t.duration_ms?mins+':'+secs:NA;obj.duracion_ms=t.duration_ms||NA;}
-    if(fields.includes('bpm'))         obj.bpm                    =t._audio?.bpm||NA;
-    if(fields.includes('key'))         obj.tonalidad              =t._audio?.key!=null?KEY_NAMES[parseInt(t._audio.key)]:NA;
-    if(fields.includes('mode'))        obj.modo                   =t._audio?.mode===1||t._audio?.mode==='1'?'Mayor':t._audio?.mode===0||t._audio?.mode==='0'?'Menor':NA;
-    if(fields.includes('loudness'))    obj.volumen_db             =t._audio?.loudness||NA;
-    if(fields.includes('energy'))      obj.energia                =t._audio?.energy!=null?Math.round(t._audio.energy*100)+'%':NA;
-    if(fields.includes('danceability'))obj.bailabilidad           =t._audio?.danceability!=null?Math.round(t._audio.danceability*100)+'%':NA;
-    if(fields.includes('valence'))     obj.mood_felicidad         =t._audio?.valence!=null?Math.round(t._audio.valence*100)+'%':NA;
-    if(fields.includes('listeners'))   obj.oyentes                =listeners?listeners.toLocaleString():NA;
-    if(fields.includes('playcount'))   obj.reproducciones_lastfm  =t._playcount?t._playcount.toLocaleString():NA;
-    if(fields.includes('popularity'))  obj.popularidad_spotify    =t.popularity!=null?t.popularity+'/100':NA;
-    if(fields.includes('genres'))      obj.generos                =(t._genres||[]).length?t._genres.join(', '):NA;
-    if(fields.includes('album'))       obj.album                  =t.album?.name||NA;
-    if(fields.includes('spotify_url')) obj.url_spotify            =t.external_urls?.spotify||NA;
-    return obj;
+    const listeners=t._listeners||(t.popularity!=null?Math.round(1000*Math.exp(t.popularity*.115)):null);
+    const row={};
+    if(fields.includes('rank'))        row['#']                    =idx+1;
+    if(fields.includes('name'))        row['Nombre']               =t.name||NA;
+    if(fields.includes('artist'))      row['Artista']              =t.artists?.map(a=>a.name).join(', ')||NA;
+    if(fields.includes('year'))        row['Año']                  =t.album?.release_date?.split('-')[0]||NA;
+    if(fields.includes('duration'))    row['Duración']             =t.duration_ms?mins+':'+secs:NA;
+    if(fields.includes('bpm'))         row['BPM']                  =t._audio?.bpm||NA;
+    if(fields.includes('key'))         row['Tonalidad']            =t._audio?.key!=null?KEY_NAMES[parseInt(t._audio.key)]:NA;
+    if(fields.includes('mode'))        row['Modo']                 =t._audio?.mode===1||t._audio?.mode==='1'?'Mayor':t._audio?.mode===0||t._audio?.mode==='0'?'Menor':NA;
+    if(fields.includes('loudness'))    row['Volumen_dB']           =t._audio?.loudness||NA;
+    if(fields.includes('energy'))      row['Energía_%']            =t._audio?.energy!=null?Math.round(t._audio.energy*100):NA;
+    if(fields.includes('danceability'))row['Bailabilidad_%']       =t._audio?.danceability!=null?Math.round(t._audio.danceability*100):NA;
+    if(fields.includes('valence'))     row['Mood_%']               =t._audio?.valence!=null?Math.round(t._audio.valence*100):NA;
+    if(fields.includes('listeners'))   row['Oyentes']              =listeners||NA;
+    if(fields.includes('playcount'))   row['Plays_LastFM']         =t._playcount||NA;
+    if(fields.includes('popularity'))  row['Popularidad_Spotify']  =t.popularity!=null?t.popularity:NA;
+    if(fields.includes('genres'))      row['Géneros']              =(t._genres||[]).length?t._genres.join(', '):NA;
+    if(fields.includes('album'))       row['Álbum']                =t.album?.name||NA;
+    if(fields.includes('spotify_url')) row['URL_Spotify']          =t.external_urls?.spotify||NA;
+    return row;
   });
+
+  // JSON bien formateado: array de filas, indentado para legibilidad
   const rl={short_term:'1mes',medium_term:'6meses',long_term:'todo'};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');
+  const jsonStr=JSON.stringify(rows,null,2);
+  const blob=new Blob([jsonStr],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='spotify-top-'+(rl[_exportRange||currentRange]||'export')+'-'+fields.length+'campos.json';a.click();URL.revokeObjectURL(url);
-  showToast('✓ JSON con '+fields.length+' campos exportado');document.getElementById('export-modal-ov')?.remove();
+  showToast('✓ JSON exportado · '+rows.length+' canciones · '+fields.length+' campos');document.getElementById('export-modal-ov')?.remove();
 }
 
 
