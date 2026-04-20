@@ -375,7 +375,7 @@ function showAuth(){document.getElementById('auth-screen').classList.remove('hid
 function logout(){sessionStorage.clear();accessToken=null;tracksData=[];showAuth();}
 function doAuth(){const cid=document.getElementById('client-id-input').value.trim();if(!cid)return;localStorage.setItem('sp_client_id',cid);startAuth();}
 function validateClientId(input){const val=input.value.trim(),valid=/^[a-f0-9]{32}$/i.test(val),hint=document.getElementById('client-id-hint'),btn=document.getElementById('connect-btn');if(!val){hint.textContent='';btn.disabled=true;btn.style.opacity='.5';}else if(valid){hint.textContent='✓ Client ID válido';hint.style.color='var(--green)';input.style.borderColor='var(--green)';btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}else{hint.textContent='Formato incorrecto';hint.style.color='var(--red)';btn.disabled=true;btn.style.opacity='.5';}}
-async function startAuth(){if(!CLIENT_ID){alert('⚠ Client ID no configurado.');return;}const verifier=generateRandom(64),challenge=await generateCodeChallenge(verifier);sessionStorage.setItem('pkce_verifier',verifier);window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({client_id:CLIENT_ID,response_type:'code',redirect_uri:REDIRECT_URI,scope:SCOPES,state:generateRandom(16),code_challenge_method:'S256',code_challenge:challenge,show_dialog:'true'});}
+async function startAuth(){if(!CLIENT_ID){alert('⚠ Client ID no configurado.');return;}const verifier=generateRandom(64),challenge=await generateCodeChallenge(verifier);sessionStorage.setItem('pkce_verifier',verifier);window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({client_id:CLIENT_ID,response_type:'code',redirect_uri:REDIRECT_URI,scope:SCOPES,state:generateRandom(16),code_challenge_method:'S256',code_challenge:challenge,show_dialog:'false'});}
 function showDashboard(){document.getElementById('auth-screen').classList.add('hidden');document.getElementById('setup-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');document.getElementById('loading').classList.remove('hidden');document.getElementById('content').classList.add('hidden');const tr=sessionStorage.getItem('sp_range')||'short_term';currentRange=tr;updateRangeButtons(tr);loadData();}
 // === TABS ===
 const ALL_TABS=['tracks','wrapped','recs','gems','evolution','map','session','palette','timeline','records','average','lab'];
@@ -460,6 +460,7 @@ const EXPORT_FIELDS=[
   {id:'listeners',label:'Oyentes',icon:'👥'},{id:'playcount',label:'Plays Last.fm',icon:'▶'},
   {id:'popularity',label:'Popularidad Spotify',icon:'📊'},{id:'genres',label:'Géneros',icon:'🎸'},
   {id:'album',label:'Álbum',icon:'💿'},{id:'spotify_url',label:'URL Spotify',icon:'🔗'},
+  {id:'lyrics',label:'Letra (Genius)',icon:'📝'},
 ];
 // Defaults: nombre, artista, año, duración, BPM, tonalidad, oyentes, popularidad, géneros
 let _exportSelectedFields=['rank','name','artist','year','duration','bpm','key','listeners','popularity','genres'];
@@ -493,6 +494,17 @@ function setExportRange(r,btn){_exportRange=r;document.querySelectorAll('[data-e
 function toggleEF(id,checked){if(checked){if(!_exportSelectedFields.includes(id))_exportSelectedFields.push(id);}else _exportSelectedFields=_exportSelectedFields.filter(f=>f!==id);const lbl=document.getElementById('ef-lbl-'+id);if(lbl)lbl.style.borderColor=checked?'var(--green)':'var(--border)';const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent=_exportSelectedFields.length+' campos · '+tracksData.length+' canciones';}
 function exportSelAll(){EXPORT_FIELDS.forEach(f=>{if(!_exportSelectedFields.includes(f.id))_exportSelectedFields.push(f.id);const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=true;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--green)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent=_exportSelectedFields.length+' campos · '+tracksData.length+' canciones';}
 function exportSelNone(){_exportSelectedFields=[];EXPORT_FIELDS.forEach(f=>{const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=false;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--border)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent='0 campos · '+tracksData.length+' canciones';}
+
+// getLyricsForTrack: returns cached lyrics or Genius search URL for the track
+function getLyricsForTrack(track){
+  if(!track) return null;
+  // If lyrics were fetched and cached during session, return them
+  if(track._lyricsText) return track._lyricsText;
+  // Otherwise return the Genius search URL as reference
+  const q=encodeURIComponent(track.name+' '+track.artists[0]?.name||'');
+  return 'https://genius.com/search?q='+q;
+}
+
 function doExportJSON(){
   const NA='N/A',fields=_exportSelectedFields;if(!fields.length){showToast('⚠ Selecciona al menos un campo');return;}
 
@@ -521,6 +533,7 @@ function doExportJSON(){
     if(fields.includes('genres'))      row['Géneros']              =(t._genres||[]).length?t._genres.join(', '):NA;
     if(fields.includes('album'))       row['Álbum']                =t.album?.name||NA;
     if(fields.includes('spotify_url')) row['URL_Spotify']          =t.external_urls?.spotify||NA;
+    if(fields.includes('lyrics'))      row['Letra']                =getLyricsForTrack(t)||NA;
     return row;
   });
 
@@ -866,7 +879,7 @@ async function createSpotifyPlaylist(){
     const realTracks=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_'));
     const filledTracks=_labCurrentTracks.filter(t=>t._filled&&!t.id.startsWith('filled_'));
     // All tracks with valid spotify IDs (including filled ones that came from real search)
-    const allValid=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_')&&t.id.length===22);
+    const allValid=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_')&&typeof t.id==='string'&&t.id.length>10);
 
     if(!allValid.length){
       btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';
@@ -878,7 +891,7 @@ async function createSpotifyPlaylist(){
     const title=document.getElementById('lab-modal-title').textContent||'Mi Playlist';
 
     // Create playlist on user's account
-    const playlist=await spotifyPost(`/users/${userId}/playlists`,{
+    const playlist=await spotifyPost('/me/playlists',{
       name:title,
       description:'Creada con Spotify Pulse 🎵 · '+allValid.length+' canciones',
       public:false
@@ -909,12 +922,14 @@ async function createSpotifyPlaylist(){
     btn.textContent='Crear en Spotify';
     btn.style.opacity='1';
     btn.style.background='var(--green)';
-
-    // 403 = missing playlist scope in token → need to re-login
+    console.error('[createSpotifyPlaylist] error:', e);
     if(e.message.includes('403')){
       showScopeErrorModal();
+    } else if(e.message.includes('401')){
+      showToast('Sesión expirada — vuelve a iniciar sesión',4000);
+      setTimeout(logout,2000);
     } else {
-      showToast('Error al crear playlist: '+e.message,5000);
+      showToast('Error: '+e.message,5000);
     }
   }
 }
@@ -945,11 +960,20 @@ function showScopeErrorModal(){
 }
 
 async function reloginForPlaylists(){
-  // Clear token so startAuth() forces re-login with new scopes
   sessionStorage.removeItem('sp_token');
   sessionStorage.removeItem('sp_expiry');
+  sessionStorage.removeItem('pkce_verifier');
   document.getElementById('scope-error-modal')?.remove();
-  await startAuth();
+  // Force Spotify to show scope approval dialog
+  if(!CLIENT_ID){alert('⚠ Client ID no configurado.');return;}
+  const verifier=generateRandom(64),challenge=await generateCodeChallenge(verifier);
+  sessionStorage.setItem('pkce_verifier',verifier);
+  // show_dialog:'true' forces Spotify to show the permissions screen again
+  window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({
+    client_id:CLIENT_ID,response_type:'code',redirect_uri:REDIRECT_URI,
+    scope:SCOPES,state:generateRandom(16),code_challenge_method:'S256',
+    code_challenge:challenge,show_dialog:'true'
+  });
 }
 
 
