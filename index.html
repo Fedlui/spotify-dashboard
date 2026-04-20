@@ -859,17 +859,97 @@ function labSearchByTitle(q){
 // Crear playlist DIRECTO en Spotify vía API
 async function createSpotifyPlaylist(){
   if(!_labCurrentTracks.length){showToast('⚠ Sin canciones en la playlist');return;}
-  const btn=document.getElementById('lab-create-btn');btn.disabled=true;btn.textContent='Creando...';btn.style.opacity='.7';
+  const btn=document.getElementById('lab-create-btn');
+  btn.disabled=true;btn.textContent='Creando...';btn.style.opacity='.7';
   try{
-    const profile=await spotifyFetch('/me'),userId=profile.id,title=document.getElementById('lab-modal-title').textContent||'Mi Playlist';
-    const playlist=await spotifyPost(`/users/${userId}/playlists`,{name:title,description:'Creada con Spotify Pulse 🎵',public:false});
-    const uris=_labCurrentTracks.map(t=>t.uri||('spotify:track:'+t.id)).filter(Boolean);
-    for(let i=0;i<uris.length;i+=100)await spotifyPost(`/playlists/${playlist.id}/tracks`,{uris:uris.slice(i,i+100)});
-    btn.disabled=false;btn.textContent='✓ Creada';btn.style.opacity='1';btn.style.background='var(--accent2)';
-    showToast(`✓ Playlist "${title}" creada con ${uris.length} canciones en Spotify`,5000);
-    if(playlist.external_urls?.spotify)setTimeout(()=>window.open(playlist.external_urls.spotify,'_blank'),800);
-    setTimeout(()=>{btn.textContent='Crear en Spotify';btn.style.background='var(--green)';},4000);
-  }catch(e){btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';showToast('Error: '+e.message,4000);}
+    // Filter out filled (recommended) tracks that don't have real Spotify IDs
+    const realTracks=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_'));
+    const filledTracks=_labCurrentTracks.filter(t=>t._filled&&!t.id.startsWith('filled_'));
+    // All tracks with valid spotify IDs (including filled ones that came from real search)
+    const allValid=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_')&&t.id.length===22);
+
+    if(!allValid.length){
+      btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';
+      showToast('⚠ Sin canciones con ID de Spotify válido',4000);return;
+    }
+
+    const profile=await spotifyFetch('/me');
+    const userId=profile.id;
+    const title=document.getElementById('lab-modal-title').textContent||'Mi Playlist';
+
+    // Create playlist on user's account
+    const playlist=await spotifyPost(`/users/${userId}/playlists`,{
+      name:title,
+      description:'Creada con Spotify Pulse 🎵 · '+allValid.length+' canciones',
+      public:false
+    });
+
+    // Add tracks in chunks of 100 (Spotify limit)
+    const uris=allValid.map(t=>'spotify:track:'+t.id);
+    for(let i=0;i<uris.length;i+=100){
+      await spotifyPost(`/playlists/${playlist.id}/tracks`,{uris:uris.slice(i,i+100)});
+    }
+
+    btn.disabled=false;
+    btn.innerHTML='✓ Creada en Spotify';
+    btn.style.opacity='1';
+    btn.style.background='var(--accent2)';
+    btn.style.color='#000';
+    showToast('✓ "'+title+'" creada con '+allValid.length+' canciones en Spotify',5000);
+    if(playlist.external_urls?.spotify){
+      setTimeout(()=>window.open(playlist.external_urls.spotify,'_blank'),600);
+    }
+    setTimeout(()=>{
+      btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg> Crear en Spotify';
+      btn.style.background='var(--green)';
+    },5000);
+
+  }catch(e){
+    btn.disabled=false;
+    btn.textContent='Crear en Spotify';
+    btn.style.opacity='1';
+    btn.style.background='var(--green)';
+
+    // 403 = missing playlist scope in token → need to re-login
+    if(e.message.includes('403')){
+      showScopeErrorModal();
+    } else {
+      showToast('Error al crear playlist: '+e.message,5000);
+    }
+  }
+}
+
+// Show clear re-login modal when 403 (missing playlist scope)
+function showScopeErrorModal(){
+  const existing=document.getElementById('scope-error-modal');if(existing)existing.remove();
+  const ov=document.createElement('div');
+  ov.id='scope-error-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:4000;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(8px);';
+  ov.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;max-width:420px;width:100%;padding:2rem;text-align:center;box-shadow:0 0 60px rgba(248,113,113,.2);">
+    <div style="font-size:2.5rem;margin-bottom:.75rem;">🔐</div>
+    <div style="font-size:1.1rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">Permiso necesario</div>
+    <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;line-height:1.7;margin-bottom:1.5rem;">
+      Para crear playlists en Spotify necesitas volver a iniciar sesión — solo tarda unos segundos.<br><br>
+      <span style="color:var(--yellow);">Tu sesión anterior no incluía el permiso de crear playlists.</span>
+    </p>
+    <div style="display:flex;gap:.75rem;justify-content:center;">
+      <button onclick="document.getElementById('scope-error-modal').remove()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Syne',sans-serif;font-size:.85rem;font-weight:600;padding:.7rem 1.5rem;border-radius:100px;cursor:pointer;">Cancelar</button>
+      <button onclick="reloginForPlaylists()" style="background:var(--green);color:#000;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;padding:.7rem 1.75rem;border-radius:100px;border:none;cursor:pointer;display:flex;align-items:center;gap:.5rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg>
+        Reconectar con Spotify
+      </button>
+    </div>
+    <p style="margin-top:1rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">No perderás tus análisis — se recargarán al volver.</p>
+  </div>`;
+  document.body.appendChild(ov);
+}
+
+async function reloginForPlaylists(){
+  // Clear token so startAuth() forces re-login with new scopes
+  sessionStorage.removeItem('sp_token');
+  sessionStorage.removeItem('sp_expiry');
+  document.getElementById('scope-error-modal')?.remove();
+  await startAuth();
 }
 
 
