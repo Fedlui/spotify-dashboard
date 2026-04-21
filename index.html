@@ -424,7 +424,18 @@ async function fetchEnrichedData(){
   }catch(e){track._genres=track._genres||[];track._audio={};}}))}
 }
 async function spotifyFetch(path){const res=await fetch(`https://api.spotify.com/v1${path}`,{headers:{'Authorization':`Bearer ${accessToken}`}});if(!res.ok){if(res.status===401){logout();throw new Error('Sesión expirada.');}throw new Error(`Spotify API error: ${res.status}`);}return res.json();}
-async function spotifyPost(path,body){const res=await fetch(`https://api.spotify.com/v1${path}`,{method:'POST',headers:{'Authorization':`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!res.ok)throw new Error(`Spotify API error: ${res.status}`);return res.json();}
+async function spotifyPost(path,body){
+  const res=await fetch(`https://api.spotify.com/v1${path}`,{method:'POST',headers:{'Authorization':`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok){
+    let errMsg=`Spotify API error: ${res.status}`;
+    try{const e=await res.json();errMsg+=` — ${e.error?.message||JSON.stringify(e)}`;}catch(e2){}
+    throw new Error(errMsg);
+  }
+  // Some endpoints (like adding tracks) return 201 with snapshot_id, others return full object
+  const ct=res.headers.get('content-type')||'';
+  if(ct.includes('json')&&res.status!==204){try{return await res.json();}catch(e){return {};}}
+  return {};
+}
 function renderUser(profile){const name=profile.display_name||profile.id;document.getElementById('user-display-name').textContent=name;document.getElementById('user-meta').textContent=`${profile.followers?.total?.toLocaleString()||0} seguidores · ${profile.country||''}`;const wrap=document.getElementById('user-avatar-wrap');wrap.innerHTML=profile.images?.[0]?.url?`<img class="user-avatar" src="${profile.images[0].url}" alt="${name}">`:`<div class="user-avatar-placeholder">${name[0].toUpperCase()}</div>`;}
 function renderStats(){
   const avgPop=tracksData.length?Math.round(tracksData.reduce((s,t)=>s+(t.popularity||0),0)/tracksData.length):null;
@@ -487,7 +498,7 @@ function showExportModal(){
 <div style="display:flex;flex-direction:column;gap:.3rem;">${EXPORT_FIELDS.map(f=>`<label id="ef-lbl-${f.id}" style="display:flex;align-items:center;gap:.625rem;background:var(--surface2);border:1px solid ${_exportSelectedFields.includes(f.id)?'var(--green)':'var(--border)'};border-radius:9px;padding:.5rem .875rem;cursor:pointer;transition:border-color .15s;"><input type="checkbox" data-efield="${f.id}" ${_exportSelectedFields.includes(f.id)?'checked':''} onchange="toggleEF('${f.id}',this.checked)" style="accent-color:var(--green);cursor:pointer;flex-shrink:0;"><span style="font-size:.88rem;flex-shrink:0;">${f.icon}</span><span style="font-size:.78rem;font-weight:600;flex:1;">${f.label}</span></label>`).join('')}</div></div>
 <div style="padding:.875rem 1.4rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:.625rem;align-items:center;">
 <span id="ef-count" style="font-size:.7rem;font-family:JetBrains Mono,monospace;color:var(--muted);flex:1;">${_exportSelectedFields.length} campos · ${tracksData.length} canciones</span>
-<button onclick="doExportJSON()" style="background:var(--accent2);color:#000;font-family:Syne,sans-serif;font-weight:800;font-size:.82rem;padding:.6rem 1.5rem;border-radius:100px;border:none;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">⬇ Descargar JSON</button></div></div>`;
+<button onclick="doExportJSON().catch(e=>showToast('Error: '+e.message,4000))" style="background:var(--accent2);color:#000;font-family:Syne,sans-serif;font-weight:800;font-size:.82rem;padding:.6rem 1.5rem;border-radius:100px;border:none;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">⬇ Descargar JSON</button></div></div>`;
   document.body.appendChild(ov);
 }
 function setExportRange(r,btn){_exportRange=r;document.querySelectorAll('[data-erange]').forEach(b=>{const a=b.getAttribute('data-erange')===r;b.style.background=a?'var(--green-dim)':'var(--surface2)';b.style.borderColor=a?'var(--green)':'var(--border)';b.style.color=a?'var(--green)':'var(--muted)';});}
@@ -495,18 +506,46 @@ function toggleEF(id,checked){if(checked){if(!_exportSelectedFields.includes(id)
 function exportSelAll(){EXPORT_FIELDS.forEach(f=>{if(!_exportSelectedFields.includes(f.id))_exportSelectedFields.push(f.id);const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=true;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--green)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent=_exportSelectedFields.length+' campos · '+tracksData.length+' canciones';}
 function exportSelNone(){_exportSelectedFields=[];EXPORT_FIELDS.forEach(f=>{const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=false;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--border)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent='0 campos · '+tracksData.length+' canciones';}
 
-// getLyricsForTrack: returns cached lyrics or Genius search URL for the track
-function getLyricsForTrack(track){
-  if(!track) return null;
-  // If lyrics were fetched and cached during session, return them
-  if(track._lyricsText) return track._lyricsText;
-  // Otherwise return the Genius search URL as reference
-  const q=encodeURIComponent(track.name+' '+track.artists[0]?.name||'');
-  return 'https://genius.com/search?q='+q;
+// Lyrics cache: fetched from lyrics.ovh (free, no key needed)
+// Called before export to pre-fetch all lyrics
+async function fetchAllLyricsForExport(onProgress){
+  const toFetch=tracksData.filter(t=>!t._lyricsText);
+  let done=0;
+  // Batch with delay to avoid rate limiting
+  for(const t of toFetch){
+    try{
+      const artist=encodeURIComponent(t.artists[0]?.name||'');
+      const title=encodeURIComponent(t.name);
+      const res=await fetch('https://api.lyrics.ovh/v1/'+artist+'/'+title);
+      if(res.ok){
+        const d=await res.json();
+        if(d.lyrics) t._lyricsText=d.lyrics.trim();
+      }
+    }catch(e){}
+    done++;
+    if(onProgress) onProgress(done,toFetch.length);
+    await new Promise(r=>setTimeout(r,120)); // ~8 req/s, stay under limit
+  }
 }
 
-function doExportJSON(){
+function getLyricsForTrack(track){
+  if(!track) return 'N/A';
+  return track._lyricsText||'N/A';
+}
+
+async function doExportJSON(){
   const NA='N/A',fields=_exportSelectedFields;if(!fields.length){showToast('⚠ Selecciona al menos un campo');return;}
+
+  // If lyrics field selected, fetch them first
+  if(fields.includes('lyrics')){
+    const cnt=document.getElementById('ef-count');
+    const origText=cnt?cnt.textContent:'';
+    if(cnt) cnt.textContent='Descargando letras... 0/'+tracksData.length;
+    await fetchAllLyricsForExport((done,total)=>{
+      if(cnt) cnt.textContent='Descargando letras... '+done+'/'+total;
+    });
+    if(cnt) cnt.textContent=origText;
+  }
 
   // Estructura: cada canción = una fila, cada campo = una columna
   // Array de objetos: [{campo1:val, campo2:val, ...}, ...]
@@ -875,89 +914,47 @@ async function createSpotifyPlaylist(){
   const btn=document.getElementById('lab-create-btn');
   btn.disabled=true;btn.textContent='Creando...';btn.style.opacity='.7';
   try{
-    // Filter out filled (recommended) tracks that don't have real Spotify IDs
-    const realTracks=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_'));
-    const filledTracks=_labCurrentTracks.filter(t=>t._filled&&!t.id.startsWith('filled_'));
-    // All tracks with valid spotify IDs (including filled ones that came from real search)
-    const allValid=_labCurrentTracks.filter(t=>t.id&&!t.id.startsWith('filled_')&&typeof t.id==='string'&&t.id.length>10);
-
-    if(!allValid.length){
+    // Only real Spotify tracks (not fake filled_ IDs from LFM recs)
+    const valid=_labCurrentTracks.filter(t=>t.id&&typeof t.id==='string'&&!t.id.startsWith('filled_'));
+    if(!valid.length){
       btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';
-      showToast('⚠ Sin canciones con ID de Spotify válido',4000);return;
+      showToast('⚠ No hay canciones de tu Spotify en esta playlist',4000);return;
     }
 
-    const profile=await spotifyFetch('/me');
-    const userId=profile.id;
     const title=document.getElementById('lab-modal-title').textContent||'Mi Playlist';
+    btn.textContent='Creando "'+title.slice(0,20)+'"...';
 
-    // Create playlist on user's account
+    // Step 1: create the playlist
     const playlist=await spotifyPost('/me/playlists',{
       name:title,
-      description:'Creada con Spotify Pulse 🎵 · '+allValid.length+' canciones',
+      description:'Creada con Spotify Pulse 🎵',
       public:false
     });
+    if(!playlist.id) throw new Error('No se recibió ID de playlist de Spotify');
 
-    // Add tracks in chunks of 100 (Spotify limit)
-    const uris=allValid.map(t=>'spotify:track:'+t.id);
+    // Step 2: add tracks in chunks of 100
+    const uris=valid.map(t=>'spotify:track:'+t.id);
+    btn.textContent='Agregando '+uris.length+' canciones...';
     for(let i=0;i<uris.length;i+=100){
-      await spotifyPost(`/playlists/${playlist.id}/tracks`,{uris:uris.slice(i,i+100)});
+      await spotifyPost('/playlists/'+playlist.id+'/tracks',{uris:uris.slice(i,i+100)});
     }
 
+    // Success
     btn.disabled=false;
-    btn.innerHTML='✓ Creada en Spotify';
-    btn.style.opacity='1';
-    btn.style.background='var(--accent2)';
-    btn.style.color='#000';
-    showToast('✓ "'+title+'" creada con '+allValid.length+' canciones en Spotify',5000);
-    if(playlist.external_urls?.spotify){
-      setTimeout(()=>window.open(playlist.external_urls.spotify,'_blank'),600);
-    }
-    setTimeout(()=>{
-      btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg> Crear en Spotify';
-      btn.style.background='var(--green)';
-    },5000);
+    btn.textContent='✓ '+uris.length+' canciones en Spotify';
+    btn.style.background='#22e065';btn.style.color='#000';btn.style.opacity='1';
+    showToast('✓ "'+title+'" creada con '+uris.length+' canciones',5000);
+    if(playlist.external_urls?.spotify) setTimeout(()=>window.open(playlist.external_urls.spotify,'_blank'),700);
+    setTimeout(()=>{btn.textContent='Crear en Spotify';btn.style.background='var(--green)';},6000);
 
   }catch(e){
-    btn.disabled=false;
-    btn.textContent='Crear en Spotify';
-    btn.style.opacity='1';
-    btn.style.background='var(--green)';
-    console.error('[createSpotifyPlaylist] error:', e);
-    if(e.message.includes('403')){
-      showScopeErrorModal();
-    } else if(e.message.includes('401')){
-      showToast('Sesión expirada — vuelve a iniciar sesión',4000);
-      setTimeout(logout,2000);
-    } else {
-      showToast('Error: '+e.message,5000);
-    }
+    btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';btn.style.background='var(--green)';
+    console.error('[playlist]',e.message);
+    // Show the real Spotify error message, not a generic one
+    showToast('Error Spotify: '+e.message.replace('Spotify API error: ',''),6000);
   }
 }
 
-// Show clear re-login modal when 403 (missing playlist scope)
-function showScopeErrorModal(){
-  const existing=document.getElementById('scope-error-modal');if(existing)existing.remove();
-  const ov=document.createElement('div');
-  ov.id='scope-error-modal';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:4000;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(8px);';
-  ov.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;max-width:420px;width:100%;padding:2rem;text-align:center;box-shadow:0 0 60px rgba(248,113,113,.2);">
-    <div style="font-size:2.5rem;margin-bottom:.75rem;">🔐</div>
-    <div style="font-size:1.1rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">Permiso necesario</div>
-    <p style="font-size:.82rem;color:var(--muted);font-family:'JetBrains Mono',monospace;line-height:1.7;margin-bottom:1.5rem;">
-      Para crear playlists en Spotify necesitas volver a iniciar sesión — solo tarda unos segundos.<br><br>
-      <span style="color:var(--yellow);">Tu sesión anterior no incluía el permiso de crear playlists.</span>
-    </p>
-    <div style="display:flex;gap:.75rem;justify-content:center;">
-      <button onclick="document.getElementById('scope-error-modal').remove()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'Syne',sans-serif;font-size:.85rem;font-weight:600;padding:.7rem 1.5rem;border-radius:100px;cursor:pointer;">Cancelar</button>
-      <button onclick="reloginForPlaylists()" style="background:var(--green);color:#000;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;padding:.7rem 1.75rem;border-radius:100px;border:none;cursor:pointer;display:flex;align-items:center;gap:.5rem;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg>
-        Reconectar con Spotify
-      </button>
-    </div>
-    <p style="margin-top:1rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">No perderás tus análisis — se recargarán al volver.</p>
-  </div>`;
-  document.body.appendChild(ov);
-}
 
 async function reloginForPlaylists(){
   sessionStorage.removeItem('sp_token');
