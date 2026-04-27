@@ -418,6 +418,34 @@ async function loadData(){
     document.getElementById('loading').classList.add('hidden');document.getElementById('content').classList.remove('hidden');
   }catch(e){console.error(e);document.getElementById('loading').innerHTML=`<div class="error-box"><strong>Error:</strong><br>${e.message}</div><button class="btn-outline" onclick="logout()" style="margin-top:1rem">← Volver</button>`;}
 }
+// Extract dominant color from a track's album cover (cached on track._color)
+function extractTrackColor(track){
+  if(track._color) return; // already done
+  const imgUrl = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url;
+  if(!imgUrl){ track._color='#1DB954'; return; }
+  const img = new Image();
+  img.crossOrigin='anonymous';
+  img.onload=()=>{
+    try{
+      const cv=document.createElement('canvas'); cv.width=cv.height=16;
+      const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,16,16);
+      const d=ctx.getImageData(0,0,16,16).data;
+      let rT=0,gT=0,bT=0,n=0;
+      for(let i=0;i<d.length;i+=4){
+        const r=d[i],g=d[i+1],b=d[i+2];
+        if(r+g+b>680||r+g+b<30) continue; // skip near-white/black
+        rT+=r; gT+=g; bT+=b; n++;
+      }
+      if(!n){ track._color='#1DB954'; return; }
+      track._color='#'+[Math.round(rT/n),Math.round(gT/n),Math.round(bT/n)]
+        .map(v=>Math.max(30,Math.min(220,v)).toString(16).padStart(2,'0')).join('');
+    } catch(e){ track._color='#1DB954'; }
+  };
+  img.onerror=()=>{ track._color='#1DB954'; };
+  img.src=imgUrl;
+}
+
+
 async function fetchEnrichedData(){
   tracksData.forEach(t=>{t._genres=[];t._audio={};});
   const chunks=[];for(let i=0;i<tracksData.length;i+=5)chunks.push(tracksData.slice(i,i+5));
@@ -445,6 +473,8 @@ async function fetchEnrichedData(){
     const jitter=()=>(Math.random()-.5)*.16;
     energy=Math.max(.05,Math.min(.99,energy+jitter()));dance=Math.max(.05,Math.min(.99,dance+jitter()));valence=Math.max(.05,Math.min(.99,valence+jitter()));
     track._audio={bpm,key:Math.floor(Math.random()*12),mode:Math.random()>.4?1:0,time_signature:sig,loudness:`${loud} dB`,energy,danceability:dance,valence};
+        // Extract dominant color from album cover
+        extractTrackColor(track);
   }catch(e){track._genres=track._genres||[];track._audio={};}}))}
 }
 async function spotifyFetch(path){const res=await fetch(`https://api.spotify.com/v1${path}`,{headers:{'Authorization':`Bearer ${accessToken}`}});if(!res.ok){if(res.status===401){logout();throw new Error('Sesión expirada.');}throw new Error(`Spotify API error: ${res.status}`);}return res.json();}
@@ -471,7 +501,99 @@ function renderStats(){
   document.getElementById('stats-row').innerHTML=[{label:'Canciones',value:tracksData.length,sub:'en tu top'},{label:'Oyentes avg',value:formatListeners(avgPop),sub:'estimados'},{label:'BPM promedio',value:avgBpm,sub:'beats/min'},{label:'Duración avg',value:`${durMin}:${durSec}`,sub:'por canción'},{label:'Géneros únicos',value:genres.length,sub:'estilos'},{label:'Año promedio',value:avgYear,sub:'de tus canciones'}].map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div><div class="stat-sub">${s.sub}</div></div>`).join('');
 }
 function renderTracks(){document.getElementById('tracks-grid').innerHTML=tracksData.map((track,i)=>{const cover=track.album?.images?.[1]?.url||track.album?.images?.[0]?.url,mins=Math.floor(track.duration_ms/60000),secs=Math.floor((track.duration_ms%60000)/1000).toString().padStart(2,'0'),rank=i+1;return`<div class="track-card" id="track-${track.id}" onclick="toggleTrack('${track.id}')"><div class="track-rank ${rank<=3?'top3':''}">${rank<=3?['🥇','🥈','🥉'][rank-1]:rank}</div>${cover?`<img class="track-cover" src="${cover}" alt="${escHtml(track.name)}" loading="lazy">`:'<div class="track-cover-placeholder">♪</div>'}<div class="track-info"><div class="track-name">${escHtml(track.name)}</div><div class="track-artist">${track.artists.map(a=>escHtml(a.name)).join(', ')}</div>${(track._genres||[]).map(g=>`<span class="genre-badge">${escHtml(g)}</span>`).join('')}</div><div class="track-meta"><div class="pop-bar"><div class="pop-track"><div class="pop-fill" style="width:${track.popularity||0}%"></div></div><span class="pop-num">${formatListeners(track.popularity,track)}</span></div><div style="font-size:.75rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.3rem;text-align:right">${mins}:${secs}</div></div><div class="track-details" id="details-${track.id}">${renderTrackDetails(track,mins,secs)}</div></div>`;}).join('');}
-function renderTrackDetails(track,mins,secs){const audio=track._audio||{},yr=track.album?.release_date?.split('-')[0]||'—';const chips=[{label:'Año',value:yr},{label:'Duración',value:`${mins}:${secs}`},{label:'BPM',value:audio.bpm||'—'},{label:'Compás',value:audio.time_signature||'—'},{label:'Tonalidad',value:audio.key!=null?KEY_NAMES[parseInt(audio.key)]:'—'},{label:'Modo',value:audio.mode===1?'Mayor':audio.mode===0?'Menor':'—'},{label:'Volumen',value:audio.loudness||'—'},{label:'Oyentes',value:track._listeners?track._listeners.toLocaleString()+' (LFM)':formatListeners(track.popularity,track)},{label:'Álbum',value:track.album?.name||'—'}];return`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem;margin-bottom:1.25rem;">${chips.map(c=>`<div class="detail-chip"><div class="detail-chip-label">${c.label}</div><div class="detail-chip-value">${escHtml(String(c.value))}</div></div>`).join('')}</div><div style="margin-top:1rem;"><div style="font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;">🎧 Reproducir</div><div id="embed-${track.id}" onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden;"><button onclick="loadSpotifyEmbed(this,'${track.id}',80)" style="width:100%;height:46px;background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);border-radius:10px;color:var(--green);font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;" onmouseover="this.style.background='rgba(29,185,84,.2)'" onmouseout="this.style.background='rgba(29,185,84,.1)'">▶ Escuchar en Spotify</button></div><div style="margin-top:.75rem;"><button style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem;padding:.4rem 1rem;border-radius:8px;cursor:pointer;" onclick="event.stopPropagation();window.open('https://genius.com/search?q='+encodeURIComponent('${encodeURIComponent(track.name)} ${encodeURIComponent(track.artists[0]?.name||'')}'),'_blank')">📝 Ver letra en Genius →</button></div></div>`;}
+function renderTrackDetails(track,mins,secs){const audio=track._audio||{},yr=track.album?.release_date?.split('-')[0]||'—';const chips=[{label:'Año',value:yr},{label:'Duración',value:`${mins}:${secs}`},{label:'BPM',value:audio.bpm||'—'},{label:'Compás',value:audio.time_signature||'—'},{label:'Tonalidad',value:audio.key!=null?KEY_NAMES[parseInt(audio.key)]:'—'},{label:'Modo',value:audio.mode===1?'Mayor':audio.mode===0?'Menor':'—'},{label:'Volumen',value:audio.loudness||'—'},{label:'Oyentes',value:track._listeners?track._listeners.toLocaleString()+' (LFM)':formatListeners(track.popularity,track)},{label:'Álbum',value:track.album?.name||'—'}];return`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem;margin-bottom:1.25rem;">${chips.map(c=>`<div class="detail-chip"><div class="detail-chip-label">${c.label}</div><div class="detail-chip-value">${escHtml(String(c.value))}</div></div>`).join('')}</div><div style="margin-top:1rem;"><div style="font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem;">🎧 Reproducir</div><div id="embed-${track.id}" onclick="event.stopPropagation()" style="border-radius:10px;overflow:hidden;"><button onclick="loadSpotifyEmbed(this,'${track.id}',80)" style="width:100%;height:46px;background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);border-radius:10px;color:var(--green);font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;" onmouseover="this.style.background='rgba(29,185,84,.2)'" onmouseout="this.style.background='rgba(29,185,84,.1)'">▶ Escuchar en Spotify</button></div><div style="margin-top:.75rem;">
+    <button style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem;padding:.4rem 1rem;border-radius:8px;cursor:pointer;transition:all .2s;" id="lbtn-${track.id}" onclick="event.stopPropagation();fetchAndShowLyrics('${track.id}','${encodeURIComponent(track.name)}','${encodeURIComponent(track.artists[0]?.name||'')}')" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📝 Ver letra</button>
+  </div>
+  <div id="lyrics-${track.id}" style="margin-top:.75rem;"></div></div>`;}
+// ── fetchAndShowLyrics: fetch from lyrics.ovh and display inline ──────────
+async function fetchAndShowLyrics(trackId, encodedName, encodedArtist){
+  const btn  = document.getElementById('lbtn-'+trackId);
+  const box  = document.getElementById('lyrics-'+trackId);
+  if(!box) return;
+
+  // Check cache on track object
+  const track = tracksData.find(t=>t.id===trackId);
+  if(track?._lyricsText){
+    renderLyricsBox(box, track._lyricsText);
+    return;
+  }
+  if(track?._lyrics===false){
+    box.innerHTML='<div style="font-family:JetBrains Mono,monospace;font-size:.75rem;color:var(--muted);padding:.5rem;background:var(--surface2);border-radius:8px;">No se encontró la letra de esta canción.</div>';
+    return;
+  }
+
+  if(btn){ btn.textContent='⏳ Buscando...'; btn.disabled=true; }
+
+  try{
+    const name   = decodeURIComponent(encodedName).replace(/\s*\([^)]*\)/g,'').replace(/[()[\]]/g,'').trim();
+    const artist = decodeURIComponent(encodedArtist).replace(/[()[\]]/g,'').trim();
+    const ctrl   = new AbortController();
+    const tid    = setTimeout(()=>ctrl.abort(), 6000);
+    const res    = await fetch(
+      'https://api.lyrics.ovh/v1/'+encodeURIComponent(artist)+'/'+encodeURIComponent(name),
+      {signal: ctrl.signal}
+    );
+    clearTimeout(tid);
+
+    if(res.status===404 || !res.ok){
+      if(track) track._lyrics=false;
+      box.innerHTML='<div style="font-family:JetBrains Mono,monospace;font-size:.75rem;color:var(--muted);padding:.5rem;background:var(--surface2);border-radius:8px;">No se encontró la letra de esta canción.</div>';
+      if(btn){ btn.textContent='📝 No encontrada'; btn.disabled=false; }
+      return;
+    }
+
+    const data = await res.json();
+    let lyricsRaw = data?.lyrics || '';
+    if(!lyricsRaw){
+      if(track) track._lyrics=false;
+      box.innerHTML='<div style="font-family:JetBrains Mono,monospace;font-size:.75rem;color:var(--muted);padding:.5rem;background:var(--surface2);border-radius:8px;">No se encontró la letra.</div>';
+      if(btn){ btn.textContent='📝 No encontrada'; btn.disabled=false; }
+      return;
+    }
+
+    // Clean the lyrics
+    const cleaned = cleanLyrics(lyricsRaw);
+    if(track){ track._lyricsText = cleaned; }
+    renderLyricsBox(box, cleaned);
+    if(btn){ btn.textContent='📝 Letra'; btn.disabled=false; }
+
+  } catch(e){
+    if(track) track._lyrics=false;
+    box.innerHTML='<div style="font-family:JetBrains Mono,monospace;font-size:.75rem;color:var(--red);padding:.5rem;">Error al cargar: '+escHtml(e.message)+'</div>';
+    if(btn){ btn.textContent='📝 Error'; btn.disabled=false; }
+  }
+}
+
+function cleanLyrics(raw){
+  return raw
+    .replace(/\r\n/g,'\n').replace(/\r/g,'\n')
+    .replace(/^Paroles de la chanson.+\n?/im,'')
+    .replace(/^Lyrics powered by.+/im,'')
+    .replace(/^You might also like\n?/im,'')
+    .replace(/\n{3,}/g,'\n\n')  // max 2 blank lines
+    .trim();
+}
+
+function renderLyricsBox(box, lyrics){
+  // Show lyrics in a scrollable box with verse formatting
+  const verses = lyrics.split('\n\n');
+  const html = verses.map(verse=>{
+    const lines = verse.split('\n').map(l=>
+      l.startsWith('[')
+        ? '<div style="font-weight:700;color:var(--green);font-size:.72rem;letter-spacing:.05em;margin-top:.25rem;">'+escHtml(l)+'</div>'
+        : '<div>'+escHtml(l)+'</div>'
+    ).join('');
+    return '<div style="margin-bottom:.875rem;">'+lines+'</div>';
+  }).join('');
+
+  box.innerHTML =
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:.875rem 1rem;'
+    +'font-family:JetBrains Mono,monospace;font-size:.78rem;line-height:1.85;color:var(--muted);'
+    +'max-height:260px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(29,185,84,.3) transparent;">'
+    +html+'</div>';
+}
+
+
 function toggleTrack(id){const card=document.getElementById('track-'+id),was=card.classList.contains('expanded');document.querySelectorAll('.track-card.expanded').forEach(c=>c.classList.remove('expanded'));if(!was)card.classList.add('expanded');}
 function loadSpotifyEmbed(btn,trackId,height){btn.parentElement.innerHTML=`<iframe src="https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=0" width="100%" height="${height}" frameBorder="0" allow="autoplay;clipboard-write;encrypted-media;fullscreen;picture-in-picture" style="border-radius:inherit;display:block;"></iframe>`;}
 function setRange(range,btn){currentRange=range;recsLoaded=false;gemsRendered=false;evolutionRendered=false;window._globeBuilt=false;sessionRendered=false;paletteRendered=false;timelineRendered=false;recordsRendered=false;window._labBuilt=false;sessionStorage.setItem('sp_range',range);updateRangeButtons(range);document.getElementById('loading').classList.remove('hidden');document.getElementById('content').classList.add('hidden');loadData();}
@@ -680,7 +802,17 @@ async function doExportJSON(){
     if(fields.includes('listeners'))    row.oyentes            = listeners;
     if(fields.includes('album'))        row.album              = album;
     if(fields.includes('spotify_url'))  row.spotify_url        = t.external_urls?.spotify || NA;
-    if(fields.includes('lyrics'))       row.lyrics             = lyrics;
+    // Color dominante de la portada (hex)
+    row.color = t._color || NA;
+    if(fields.includes('lyrics')){
+      // Export lyrics as clean multi-line text — not a URL
+      const rawLyrics = t._lyricsText || NA;
+      if(rawLyrics !== NA){
+        row.lyrics = cleanLyrics(rawLyrics);
+      } else {
+        row.lyrics = NA;
+      }
+    }
     // Video musical — always a YouTube search link
     if(fields.includes('spotify_url'))  row.video_musical      = ytUrl;
 
