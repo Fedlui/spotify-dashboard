@@ -354,8 +354,8 @@ const CLIENT_ID=(typeof _APP_CONFIG!=='undefined')?_APP_CONFIG.clientId:null;
 const ALLOWED_EMAILS=(typeof _APP_CONFIG!=='undefined')?(_APP_CONFIG.allowedEmails||[]):[];
 const LASTFM_KEY='6c708f592f3f69bcfb89c9a119c07fbb';
 const REDIRECT_URI=window.location.href.split('?')[0].split('#')[0];
-const SCOPES='user-top-read user-read-private user-read-email playlist-modify-public playlist-modify-private';
-let accessToken=null,tracksData=[],currentRange='short_term';
+const SCOPES='user-top-read user-read-private user-read-email user-library-read playlist-modify-public playlist-modify-private';
+let accessToken=null,tracksData=[],likedData=[],currentRange='short_term';
 const KEY_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function formatNum(n){if(!n||isNaN(n))return'—';if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return Math.round(n/1e3)+'K';return n.toString();}
@@ -443,6 +443,44 @@ function extractTrackColor(track){
   };
   img.onerror=()=>{ track._color='#1DB954'; };
   img.src=imgUrl;
+}
+
+
+// Pre-fetch ALL lyrics before export (called by optional button in export modal)
+async function prefetchAllLyrics(){
+  const btn=document.getElementById('ef-lyrics-btn');
+  const cnt=document.getElementById('ef-count');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Descargando letras...';}
+  const all=[...tracksData,...likedData.filter(l=>!tracksData.find(t=>t.id===l.id))];
+  const total=all.length;let done=0;
+  await fetchAllLyricsForExport((d,t)=>{
+    done=d;
+    if(cnt) cnt.textContent=`Letras: ${d}/${t} · ${Math.round(d/t*100)}%`;
+    if(btn) btn.textContent=`⏳ ${d}/${t} letras...`;
+  }, all);
+  if(btn){btn.textContent='✓ Letras listas — ahora exporta';btn.style.color='var(--green)';}
+}
+
+// Fetch liked/saved songs from Spotify (up to 2000)
+// These are the songs the user has saved with ❤️ — much richer dataset
+async function fetchLikedSongs(onProgress){
+  const all=[];let offset=0,total=9999;
+  while(offset<total&&offset<2000){
+    if(onProgress) onProgress(all.length, Math.min(total,2000));
+    try{
+      const res=await spotifyFetch(`/me/tracks?limit=50&offset=${offset}`);
+      total=res.total||0;
+      const items=(res.items||[]).map(i=>i.track).filter(Boolean);
+      all.push(...items);
+      offset+=50;
+    }catch(e){break;}
+  }
+  // Deduplicate
+  const seen=new Set(tracksData.map(t=>t.id));
+  likedData=all.filter(t=>t&&t.id&&!seen.has(t.id));
+  // Add basic genre/audio stubs so Lab filters work
+  likedData.forEach(t=>{if(!t._genres)t._genres=[];if(!t._audio)t._audio={};});
+  return likedData;
 }
 
 
@@ -651,7 +689,7 @@ function showExportModal(){
 <div style="display:flex;gap:.4rem;"><button onclick="exportSelAll()" style="font-size:.65rem;font-family:JetBrains Mono,monospace;color:var(--green);background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);padding:.2rem .55rem;border-radius:5px;cursor:pointer;">Todo</button><button onclick="exportSelNone()" style="font-size:.65rem;font-family:JetBrains Mono,monospace;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:.2rem .55rem;border-radius:5px;cursor:pointer;">Ninguno</button></div></div>
 <div style="display:flex;flex-direction:column;gap:.3rem;">${EXPORT_FIELDS.map(f=>`<label id="ef-lbl-${f.id}" style="display:flex;align-items:center;gap:.625rem;background:var(--surface2);border:1px solid ${_exportSelectedFields.includes(f.id)?'var(--green)':'var(--border)'};border-radius:9px;padding:.5rem .875rem;cursor:pointer;transition:border-color .15s;"><input type="checkbox" data-efield="${f.id}" ${_exportSelectedFields.includes(f.id)?'checked':''} onchange="toggleEF('${f.id}',this.checked)" style="accent-color:var(--green);cursor:pointer;flex-shrink:0;"><span style="font-size:.88rem;flex-shrink:0;">${f.icon}</span><span style="font-size:.78rem;font-weight:600;flex:1;">${f.label}</span></label>`).join('')}</div></div>
 <div style="padding:.875rem 1.4rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:.625rem;align-items:center;">
-<span id="ef-count" style="font-size:.7rem;font-family:JetBrains Mono,monospace;color:var(--muted);flex:1;">${_exportSelectedFields.length} campos · ${tracksData.length} canciones</span>
+<div style="display:flex;flex-direction:column;gap:.4rem;flex:1;"><span id="ef-count" style="font-size:.7rem;font-family:JetBrains Mono,monospace;color:var(--muted);">${_exportSelectedFields.length} campos · ${tracksData.length} canciones</span>${_exportSelectedFields.includes('lyrics')?'<button onclick="prefetchAllLyrics()" id="ef-lyrics-btn" style="background:rgba(192,132,252,.12);border:1px solid rgba(192,132,252,.3);color:var(--accent);font-family:JetBrains Mono,monospace;font-size:.65rem;padding:.25rem .625rem;border-radius:6px;cursor:pointer;text-align:left;">⬇ Pre-cargar letras antes de exportar (opcional, tarda ~2min)</button>':''}</div>
 <button onclick="doExportJSON().catch(e=>showToast('Error: '+e.message,4000))" style="background:var(--accent2);color:#000;font-family:Syne,sans-serif;font-weight:800;font-size:.82rem;padding:.6rem 1.5rem;border-radius:100px;border:none;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">⬇ Descargar JSON</button></div></div>`;
   document.body.appendChild(ov);
 }
@@ -711,17 +749,8 @@ function getLyricsForTrack(track){
 async function doExportJSON(){
   const NA='N/A', fields=_exportSelectedFields;
   if(!fields.length){showToast('⚠ Selecciona al menos un campo');return;}
-
-  // Step 1: If lyrics selected, fetch them all with timeout+batching
-  if(fields.includes('lyrics')){
-    const cnt=document.getElementById('ef-count');
-    const origTxt=cnt?cnt.textContent:'';
-    if(cnt) cnt.textContent='Descargando letras... 0/'+tracksData.length;
-    await fetchAllLyricsForExport((done,total)=>{
-      if(cnt) cnt.textContent='Descargando letras... '+done+'/'+total;
-    });
-    if(cnt) cnt.textContent=origTxt;
-  }
+  // Lyrics: use cached ones — don't block export waiting for downloads
+  // User can pre-fetch via the "⬇ Letras" button
 
   // Step 2: Build rows with EXACT musicstax-compatible field names
   const rows = tracksData.map((t, idx) => {
@@ -836,178 +865,259 @@ async function doExportJSON(){
 // === LAB DE PLAYLIST (con crear en Spotify vía API) ===
 let _labCurrentTracks=[],_labSearchDebounce=null;
 function renderLab(){
-  const el=document.getElementById('lab-content');if(!el||window._labBuilt)return;window._labBuilt=true;
+  const el=document.getElementById('lab-content');
+  if(!el||window._labBuilt)return;
+  window._labBuilt=true;
 
-  // Build artist map — ALL tracks, no duplicates
-  const artistMap={};
-  tracksData.forEach(t=>{t.artists.forEach(a=>{
-    if(!artistMap[a.name])artistMap[a.name]={name:a.name,tracks:[],img:null};
-    if(!artistMap[a.name].tracks.find(x=>x.id===t.id))artistMap[a.name].tracks.push(t);
-    if(!artistMap[a.name].img)artistMap[a.name].img=t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
-  });});
+  // ── Show loading state immediately ──────────────────────────────────────
+  el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem;gap:1rem;">
+    <div class="spinner"></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--green);" id="lab-init-status">🧪 Inicializando laboratorio...</div>
+  </div>`;
 
-  // Build genre map
-  const genreMap={};
-  tracksData.forEach(t=>{(t._genres||[]).forEach(g=>{
-    if(!genreMap[g])genreMap[g]={name:g,tracks:[],img:null};
-    if(!genreMap[g].tracks.find(x=>x.id===t.id))genreMap[g].tracks.push(t);
-    if(!genreMap[g].img)genreMap[g].img=t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
-  });});
+  // ── Load liked songs then build lab ─────────────────────────────────────
+  _buildLab(el);
+}
 
-  // Stats for filters
-  const avgListeners=tracksData.reduce((s,t)=>s+(t._listeners||Math.round(1000*Math.exp((t.popularity||0)*.115))),0)/Math.max(1,tracksData.length);
+async function _buildLab(el){
+  const statusEl = document.getElementById('lab-init-status');
 
-  // ── STORE playlists in window so onclick can access them ──────────────────
-  // Key: slug → {name, tracks}
+  // 1. Fetch liked songs
+  if(statusEl) statusEl.textContent='❤️ Cargando tus canciones guardadas...';
+  let likedCount=0;
+  try{
+    await fetchLikedSongs((done,total)=>{
+      likedCount=done;
+      if(statusEl) statusEl.textContent=`❤️ Cargando gustados... ${done}/${total}`;
+    });
+  }catch(e){ console.warn('liked songs fetch failed',e); }
+
+  if(statusEl) statusEl.textContent='🔬 Analizando tu biblioteca...';
+  // Small delay to let UI update
+  await new Promise(r=>setTimeout(r,50));
+
+  // ── ALL tracks = liked + top (liked first, they're more personal) ────────
+  const allTracks = [...likedData, ...tracksData.filter(t=>!likedData.find(l=>l.id===t.id))];
+  const totalAll  = allTracks.length;
+  const hasLiked  = likedData.length > 0;
+
+  // ── Build maps ────────────────────────────────────────────────────────────
+  const artistMap={}, genreMap={};
+  allTracks.forEach(t=>{
+    t.artists.forEach(a=>{
+      if(!artistMap[a.name]) artistMap[a.name]={name:a.name,tracks:[],img:null,liked:0,top:0};
+      if(!artistMap[a.name].tracks.find(x=>x.id===t.id)){
+        artistMap[a.name].tracks.push(t);
+        if(likedData.find(l=>l.id===t.id)) artistMap[a.name].liked++;
+        else artistMap[a.name].top++;
+      }
+      if(!artistMap[a.name].img) artistMap[a.name].img=t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
+    });
+    (t._genres||[]).forEach(g=>{
+      if(!genreMap[g]) genreMap[g]={name:g,tracks:[],img:null};
+      if(!genreMap[g].tracks.find(x=>x.id===t.id)) genreMap[g].tracks.push(t);
+      if(!genreMap[g].img) genreMap[g].img=t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
+    });
+  });
+
+  // ── Stats for filters ─────────────────────────────────────────────────────
+  const avgListeners=allTracks.reduce((s,t)=>s+(t._listeners||Math.round(1000*Math.exp((t.popularity||0)*.115))),0)/Math.max(1,allTracks.length);
+
+  // ── Register all playlists ────────────────────────────────────────────────
   window._labPlaylists={};
-  const reg=(slug,name,tracks)=>{window._labPlaylists[slug]={name,tracks:[...tracks]};return slug;};
+  window._labAllTracks=allTracks;
+  const reg=(slug,name,tracks,src)=>{
+    window._labPlaylists[slug]={name,tracks:[...tracks],src:src||'mix'};
+  };
 
-  // Creative playlists
-  const gems=tracksData.filter(t=>(t._listeners||Math.round(1000*Math.exp((t.popularity||0)*.115)))<avgListeners*.5).sort((a,b)=>(a._listeners||0)-(b._listeners||0));
+  // Creative playlists — prefer liked songs
+  const liked50=likedData.slice(0,50);
+  const gems=allTracks.filter(t=>(t._listeners||Math.round(1000*Math.exp((t.popularity||0)*.115)))<avgListeners*.4).slice(0,40);
   const creativeDefs=[
-    {slug:'fav5',    name:'Favoritos ⭐',          emoji:'⭐', color:'#fbbf24', tracks:tracksData.slice(0,25)},
-    {slug:'gems',    name:'Tus gemas 💎',           emoji:'💎', color:'#f59e0b', tracks:gems},
-    {slug:'latino',  name:'Ritmo latino 🌶️',        emoji:'🌶️', color:'#f97316', tracks:tracksData.filter(t=>(t._genres||[]).some(g=>['reggaeton','latin','cumbia','salsa','bachata','dembow','urbano','trap latino','reggae'].some(k=>g.toLowerCase().includes(k))))},
-    {slug:'noches',  name:'Noches 🌙',              emoji:'🌙', color:'#818cf8', tracks:tracksData.filter(t=>t._audio?.energy<0.55&&t._audio?.valence<0.55)},
-    {slug:'gym',     name:'Gym mode 💪',            emoji:'💪', color:'#ef4444', tracks:tracksData.filter(t=>t._audio?.energy>0.75&&(t._audio?.bpm||0)>120)},
-    {slug:'baile',   name:'Bailable AF 💃',         emoji:'💃', color:'#ec4899', tracks:tracksData.filter(t=>t._audio?.danceability>0.72)},
-    {slug:'latam',   name:'Artistas latinos 🌎',    emoji:'🌎', color:'#22c55e', tracks:tracksData.filter(t=>t.artists.some(a=>{const c=ARTIST_COUNTRIES[a.name]||_mbCache[a.name];return['PR','CO','MX','AR','CL','BR','ES','CU','DO','PE','VE','EC','BO','PY','UY','CR','PA','GT','HN','SV','NI'].includes(c);}))},
-    {slug:'fire',    name:'Puro fire 🔥',           emoji:'🔥', color:'#fb923c', tracks:tracksData.filter(t=>t._audio?.energy>0.82)},
-    {slug:'chill',   name:'Modo chill 🌊',          emoji:'🌊', color:'#38bdf8', tracks:tracksData.filter(t=>t._audio?.energy<0.42)},
+    {slug:'liked_recent', name:'❤️ Gustados recientes',  emoji:'❤️', color:'#f43f5e', tracks:likedData.slice(0,50), src:'liked'},
+    {slug:'fav5',         name:'⭐ Top personal',         emoji:'⭐', color:'#fbbf24', tracks:[...likedData.slice(0,10),...tracksData.slice(0,15)], src:'mix'},
+    {slug:'gems',         name:'💎 Tus gemas',            emoji:'💎', color:'#f59e0b', tracks:gems, src:'mix'},
+    {slug:'latino',       name:'🌶️ Ritmo latino',         emoji:'🌶️', color:'#f97316', tracks:allTracks.filter(t=>(t._genres||[]).some(g=>['reggaeton','latin','cumbia','salsa','bachata','dembow','urbano','trap latino','reggae'].some(k=>g.toLowerCase().includes(k)))), src:'mix'},
+    {slug:'noches',       name:'🌙 Noches',               emoji:'🌙', color:'#818cf8', tracks:allTracks.filter(t=>t._audio?.energy<0.55&&t._audio?.valence<0.55), src:'mix'},
+    {slug:'gym',          name:'💪 Gym mode',             emoji:'💪', color:'#ef4444', tracks:allTracks.filter(t=>t._audio?.energy>0.75&&(t._audio?.bpm||0)>120), src:'mix'},
+    {slug:'baile',        name:'💃 Bailable AF',          emoji:'💃', color:'#ec4899', tracks:allTracks.filter(t=>t._audio?.danceability>0.72), src:'mix'},
+    {slug:'latam',        name:'🌎 Artistas latinos',     emoji:'🌎', color:'#22c55e', tracks:allTracks.filter(t=>t.artists.some(a=>{const c=ARTIST_COUNTRIES[a.name]||_mbCache[a.name];return['PR','CO','MX','AR','CL','BR','ES','CU','DO','PE','VE','EC','BO','PY','UY','CR','PA','GT','HN','SV','NI'].includes(c);})), src:'mix'},
+    {slug:'fire',         name:'🔥 Puro fire',            emoji:'🔥', color:'#fb923c', tracks:allTracks.filter(t=>t._audio?.energy>0.82), src:'mix'},
+    {slug:'chill',        name:'🌊 Modo chill',           emoji:'🌊', color:'#38bdf8', tracks:allTracks.filter(t=>t._audio?.energy<0.42), src:'mix'},
   ].filter(p=>p.tracks.length>0);
+  creativeDefs.forEach(p=>reg(p.slug,p.name,p.tracks,p.src));
 
-  creativeDefs.forEach(p=>reg(p.slug,p.name,p.tracks));
-
-  // Mood playlists
+  // Mood / BPM
   const moodDefs=[
-    {slug:'happy',   name:'Todo feliz ☀️',         emoji:'☀️', color:'#fbbf24', filter:t=>t._audio?.valence>0.65},
-    {slug:'sad',     name:'Melancólico 🌧️',         emoji:'🌧️', color:'#38bdf8', filter:t=>t._audio?.valence<0.35},
-    {slug:'fast',    name:'Súper rápido ⚡',        emoji:'⚡', color:'#f87171', filter:t=>(t._audio?.bpm||0)>140},
-    {slug:'mid',     name:'Ritmo equilibrado 🎵',   emoji:'🎵', color:'#1DB954', filter:t=>(t._audio?.bpm||0)>=90&&(t._audio?.bpm||0)<=140},
-    {slug:'slow',    name:'Lento y profundo 🎹',    emoji:'🎹', color:'#a855f7', filter:t=>(t._audio?.bpm||0)>0&&(t._audio?.bpm||0)<90},
+    {slug:'happy',  name:'☀️ Todo feliz',          emoji:'☀️', color:'#fbbf24', filter:t=>t._audio?.valence>0.65},
+    {slug:'sad',    name:'🌧️ Melancólico',          emoji:'🌧️', color:'#38bdf8', filter:t=>t._audio?.valence<0.35},
+    {slug:'fast',   name:'⚡ Súper rápido',         emoji:'⚡', color:'#f87171', filter:t=>(t._audio?.bpm||0)>140},
+    {slug:'mid',    name:'🎵 Ritmo equilibrado',    emoji:'🎵', color:'#1DB954', filter:t=>(t._audio?.bpm||0)>=90&&(t._audio?.bpm||0)<=140},
+    {slug:'slow',   name:'🎹 Lento y profundo',     emoji:'🎹', color:'#a855f7', filter:t=>(t._audio?.bpm||0)>0&&(t._audio?.bpm||0)<90},
   ];
-  moodDefs.forEach(p=>{const trs=tracksData.filter(p.filter);reg(p.slug,p.name,trs);p.tracks=trs;});
-  const moodDefsFiltered=moodDefs.filter(p=>p.tracks.length>0);
+  moodDefs.forEach(p=>{const trs=allTracks.filter(p.filter);reg(p.slug,p.name,trs,p.src);p.tracks=trs;});
 
-  // Epoch playlists
+  // Epoch
   const epochDefs=[
-    {slug:'ep2020',  name:'2020s 📲',  emoji:'📲', color:'#1DB954', filter:t=>parseInt(t.album?.release_date)>=2020},
-    {slug:'ep2010',  name:'2010s 📱',  emoji:'📱', color:'#38bdf8', filter:t=>{const y=parseInt(t.album?.release_date);return y>=2010&&y<2020;}},
-    {slug:'ep2000',  name:'2000s 💿',  emoji:'💿', color:'#c084fc', filter:t=>{const y=parseInt(t.album?.release_date);return y>=2000&&y<2010;}},
-    {slug:'ep90',    name:'90s 📼',    emoji:'📼', color:'#fbbf24', filter:t=>{const y=parseInt(t.album?.release_date);return y>=1990&&y<2000;}},
-    {slug:'epOld',   name:'Clásicos 🎸',emoji:'🎸',color:'#f87171', filter:t=>parseInt(t.album?.release_date)<1990},
+    {slug:'ep2020',name:'2020s 📲',emoji:'📲',color:'#1DB954',filter:t=>parseInt(t.album?.release_date)>=2020},
+    {slug:'ep2010',name:'2010s 📱',emoji:'📱',color:'#38bdf8',filter:t=>{const y=parseInt(t.album?.release_date);return y>=2010&&y<2020;}},
+    {slug:'ep2000',name:'2000s 💿',emoji:'💿',color:'#c084fc',filter:t=>{const y=parseInt(t.album?.release_date);return y>=2000&&y<2010;}},
+    {slug:'ep90',  name:'90s 📼', emoji:'📼',color:'#fbbf24',filter:t=>{const y=parseInt(t.album?.release_date);return y>=1990&&y<2000;}},
+    {slug:'epOld', name:'Clásicos 🎸',emoji:'🎸',color:'#f87171',filter:t=>parseInt(t.album?.release_date)<1990},
   ];
-  epochDefs.forEach(p=>{const trs=tracksData.filter(p.filter);reg(p.slug,p.name,trs);p.tracks=trs;});
-  const epochDefsFiltered=epochDefs.filter(p=>p.tracks.length>0);
+  epochDefs.forEach(p=>{const trs=allTracks.filter(p.filter);reg(p.slug,p.name,trs);p.tracks=trs;});
 
-  // Color playlists from palette
+  // Color playlists
   const colorPlaylists=[];
   if(_paletteAllColors&&_paletteAllColors.length>0){
-    const colorGroups={};
-    _paletteAllColors.forEach(c=>{if(!colorGroups[c.range])colorGroups[c.range]=[];colorGroups[c.range].push(c.track);});
+    const cg={};
+    _paletteAllColors.forEach(c=>{if(!cg[c.range])cg[c.range]=[];cg[c.range].push(c.track);});
     COLOR_RANGES.forEach(cr=>{
-      const trs=colorGroups[cr.name];
-      if(trs&&trs.length>=3){
+      const trs=cg[cr.name];if(trs&&trs.length>=3){
         const slug='col_'+cr.name;reg(slug,cr.name+' vibes',trs);
         colorPlaylists.push({slug,name:cr.name+' vibes',tracks:trs,color:cr.col,emoji:colorEmoji(cr.name)});
       }
     });
   }
 
-  // Artist playlists
   const topArtists=Object.values(artistMap).sort((a,b)=>b.tracks.length-a.tracks.length);
-  topArtists.forEach(a=>reg('artist_'+a.name,a.name,a.tracks));
-
-  // Genre playlists
+  topArtists.forEach(a=>reg('artist_'+a.name,a.name,a.tracks,'mix'));
   const topGenres=Object.values(genreMap).sort((a,b)=>b.tracks.length-a.tracks.length);
   topGenres.forEach(g=>reg('genre_'+g.name,g.name,g.tracks));
 
   // ── Card renderer ─────────────────────────────────────────────────────────
-  const MIN_TRACKS=10; // playlists with fewer will show fill badge
-
+  const MIN=10;
   const labCard=(slug,opts)=>{
-    const{img,name,count,color='var(--green)',emoji,badge,colorSwatches}=opts;
-    const needsFill=count>0&&count<MIN_TRACKS;
-    const fillBadge=needsFill?`<div style="position:absolute;top:.3rem;left:.3rem;background:rgba(0,0,0,.75);border:1px solid rgba(29,185,84,.5);color:var(--green);font-size:.52rem;font-family:'JetBrains Mono',monospace;font-weight:700;padding:.15rem .4rem;border-radius:5px;z-index:2;">+relleno</div>`:'';
-    const countBadge=`<div style="position:absolute;top:.3rem;right:.3rem;background:rgba(0,0,0,.75);border:1px solid ${color};color:${color};font-size:.55rem;font-family:'JetBrains Mono',monospace;font-weight:700;padding:.15rem .4rem;border-radius:5px;z-index:2;">${badge||count}</div>`;
+    const{img,name,count,color='var(--green)',emoji,badge,colorSwatches,src}=opts;
+    const srcBadge=src==='liked'?'<div style="position:absolute;bottom:.3rem;left:.3rem;font-size:.58rem;background:rgba(244,63,94,.85);border-radius:4px;padding:.1rem .35rem;font-weight:700;color:#fff;font-family:JetBrains Mono,monospace;z-index:2;">❤️ gustados</div>':'';
+    const needsFill=count>0&&count<MIN;
+    const fillBadge=needsFill?`<div style="position:absolute;top:.3rem;left:.3rem;background:rgba(0,0,0,.8);border:1px solid ${color};color:${color};font-size:.52rem;font-family:'JetBrains Mono',monospace;font-weight:700;padding:.12rem .4rem;border-radius:4px;z-index:2;">+relleno</div>`:'';
+    const cntBadge=`<div style="position:absolute;top:.3rem;right:.3rem;background:rgba(0,0,0,.8);border:1px solid ${color};color:${color};font-size:.55rem;font-family:'JetBrains Mono',monospace;font-weight:700;padding:.12rem .4rem;border-radius:4px;z-index:2;">${badge!=null?badge:count}</div>`;
     let imgEl;
     if(colorSwatches&&colorSwatches.length>=3){
-      // 2x2 collage of covers + color dot
-      imgEl=`<div style="position:relative;aspect-ratio:1;overflow:hidden;background:${color}18;">${colorSwatches.slice(0,4).map((t,i)=>{const c=t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;return c?`<img src="${c}" style="position:absolute;${['top:0;left:0','top:0;right:0','bottom:0;left:0','bottom:0;right:0'][i]};width:50%;height:50%;object-fit:cover;display:block;" onerror="this.remove()">`:''}).join('')}<div style="position:absolute;inset:0;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;"><div style="width:28px;height:28px;border-radius:50%;background:${color};box-shadow:0 0 18px ${color};border:2px solid rgba(255,255,255,.6);"></div></div>${fillBadge}${countBadge}</div>`;
+      imgEl=`<div style="position:relative;aspect-ratio:1;overflow:hidden;background:${color}18;">${colorSwatches.slice(0,4).map((t,i)=>{const c=t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;return c?`<img src="${c}" style="position:absolute;${['top:0;left:0','top:0;right:0','bottom:0;left:0','bottom:0;right:0'][i]};width:50%;height:50%;object-fit:cover;" onerror="this.remove()">`:''}).join('')}<div style="position:absolute;inset:0;background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;"><div style="width:26px;height:26px;border-radius:50%;background:${color};box-shadow:0 0 16px ${color};border:2px solid rgba(255,255,255,.6);"></div></div>${fillBadge}${cntBadge}${srcBadge}</div>`;
     } else if(img){
-      imgEl=`<div style="position:relative;aspect-ratio:1;overflow:hidden;"><img src="${img}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.1) brightness(.88);" onerror="this.parentElement.style.background='${color}22';this.remove()"><div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(0,0,0,.65));"></div>${fillBadge}${countBadge}</div>`;
+      imgEl=`<div style="position:relative;aspect-ratio:1;overflow:hidden;"><img src="${img}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;filter:saturate(1.1) brightness(.85);" onerror="this.parentElement.style.background='${color}22';this.remove()"><div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 45%,rgba(0,0,0,.7));"></div>${fillBadge}${cntBadge}${srcBadge}</div>`;
     } else {
-      imgEl=`<div style="aspect-ratio:1;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:2.2rem;position:relative;">${emoji||'♪'}${fillBadge}${countBadge}</div>`;
+      imgEl=`<div style="aspect-ratio:1;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:2.2rem;position:relative;">${emoji||'♪'}${fillBadge}${cntBadge}${srcBadge}</div>`;
     }
-    return `<div class="lab-card" onclick="openLabBySlug('${slug}')">${imgEl}<div class="lab-card-body"><div class="lab-card-name" title="${escHtml(name)}">${escHtml(name)}</div><div class="lab-card-count" style="color:${color};">${count} canción${count!==1?'es':''}</div></div></div>`;
+    return `<div class="lab-card" onclick="openLabBySlug('${slug}')">${imgEl}<div class="lab-card-body"><div class="lab-card-name" title="${escHtml(name)}">${escHtml(name)}</div><div class="lab-card-count" style="color:${color};">${count.toLocaleString()} canción${count!==1?'es':''}</div></div></div>`;
   };
 
-  // ── Build HTML ────────────────────────────────────────────────────────────
+  // ── Build Lab HTML — Lab aesthetic ────────────────────────────────────────
+  const likedBanner = hasLiked
+    ? `<div style="background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.25);border-radius:12px;padding:.75rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.75rem;"><span style="font-size:1.4rem;">❤️</span><div><div style="font-size:.78rem;font-weight:700;color:#f43f5e;">${likedData.length.toLocaleString()} canciones guardadas cargadas</div><div style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Tus gustados son la base principal del Lab · ${tracksData.length} del top también incluidos</div></div></div>`
+    : `<div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:.75rem 1.25rem;margin-bottom:1.25rem;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--yellow);">⚠️ No se pudieron cargar los gustados — usando solo el top ${tracksData.length}. Vuelve a iniciar sesión para habilitarlos.</div>`;
+
   el.innerHTML=`
-<div style="margin-bottom:1.4rem;">
-  <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.3rem;">🧪 Lab de Playlist</h2>
-  <p style="font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Crea playlists desde tus gustos · se crean directo en Spotify</p>
-</div>
+<style>
+/* ── LAB AESTHETIC ── */
+.lab-workspace{background:linear-gradient(135deg,#060810 0%,#0a0f1a 50%,#060c10 100%);border:1px solid rgba(29,185,84,.15);border-radius:20px;padding:1.5rem;position:relative;overflow:hidden;}
+.lab-workspace::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(29,185,84,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(29,185,84,.03) 1px,transparent 1px);background-size:24px 24px;pointer-events:none;}
+.lab-workspace::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--green) 30%,var(--accent2) 70%,transparent 100%);animation:scan 3s linear infinite;}
+.lab-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;}
+.lab-title-area{flex:1;}
+.lab-badge{display:inline-flex;align-items:center;gap:.4rem;background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.3);border-radius:100px;padding:.25rem .75rem;font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);font-family:'JetBrains Mono',monospace;margin-bottom:.4rem;}
+.lab-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse-dot 1.5s ease-in-out infinite;}
+.lab-stat-strip{display:flex;gap:1.5rem;margin-bottom:1.5rem;padding:.75rem 1rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:10px;}
+.lab-stat{text-align:center;}
+.lab-stat-val{font-size:1.1rem;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--green);}
+.lab-stat-lbl{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+.lab-section{margin-bottom:1.75rem;}
+.lab-section-title{font-size:.6rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;}
+.lab-section-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent);}
+/* Search */
+.lab-search-wrap{background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1.5rem;position:relative;}
+.lab-search-wrap::before{content:'🔬';position:absolute;right:1rem;top:50%;transform:translateY(-50%) translateY(-0.5rem);font-size:1.5rem;opacity:.3;pointer-events:none;}
+</style>
 
-<!-- SEARCH -->
-<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.1rem 1.25rem;margin-bottom:1.5rem;">
-  <div style="font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);margin-bottom:.6rem;">🔍 Crear por tema / nombre</div>
-  <div style="position:relative;"><span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);pointer-events:none;">🎵</span>
-  <input id="lab-title-input" placeholder="Ej: Workout, Tarde lluviosa, Cumbia 2020..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.82rem;padding:.7rem 1rem .7rem 2.25rem;border-radius:10px;outline:none;transition:border-color .2s;" oninput="labSearchByTitle(this.value)" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--border)'"/></div>
-  <div id="lab-title-results" style="margin-top:.625rem;"></div>
-</div>
+<div class="lab-workspace">
+  <!-- Header -->
+  <div class="lab-header">
+    <div style="width:48px;height:48px;border-radius:12px;background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.3);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">🧪</div>
+    <div class="lab-title-area">
+      <div class="lab-badge"><span class="lab-badge-dot"></span>LABORATORIO ACTIVO</div>
+      <div style="font-size:1.2rem;font-weight:800;letter-spacing:-.03em;">Lab de Playlist</div>
+      <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Crea · Edita · Exporta directo a Spotify</div>
+    </div>
+  </div>
 
-<!-- CREATIVE -->
-<div style="margin-bottom:1.75rem;">
-  <p style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">✨ Playlists inteligentes</p>
-  <div class="lab-grid">${creativeDefs.map(p=>labCard(p.slug,{img:p.tracks[0]?.album?.images?.[1]?.url||p.tracks[0]?.album?.images?.[0]?.url,name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji})).join('')}</div>
-</div>
+  <!-- Stats strip -->
+  <div class="lab-stat-strip">
+    <div class="lab-stat"><div class="lab-stat-val">${likedData.length.toLocaleString()}</div><div class="lab-stat-lbl">❤️ Gustados</div></div>
+    <div class="lab-stat"><div class="lab-stat-val">${tracksData.length}</div><div class="lab-stat-lbl">🏆 Top</div></div>
+    <div class="lab-stat"><div class="lab-stat-val">${totalAll.toLocaleString()}</div><div class="lab-stat-lbl">🎵 Total</div></div>
+    <div class="lab-stat"><div class="lab-stat-val">${Object.keys(artistMap).length}</div><div class="lab-stat-lbl">🎤 Artistas</div></div>
+    <div class="lab-stat"><div class="lab-stat-val">${Object.keys(genreMap).length}</div><div class="lab-stat-lbl">🎸 Géneros</div></div>
+    <div class="lab-stat"><div class="lab-stat-val">${creativeDefs.length+moodDefs.filter(p=>p.tracks.length).length+epochDefs.filter(p=>p.tracks?.length).length}</div><div class="lab-stat-lbl">🧬 Playlists</div></div>
+  </div>
 
-<!-- COLOR -->
-${colorPlaylists.length?`<div style="margin-bottom:1.75rem;"><p style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">🎨 Por color de portada</p><div class="lab-grid">${colorPlaylists.map(p=>labCard(p.slug,{name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji,colorSwatches:p.tracks})).join('')}</div></div>`:`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:.875rem 1.25rem;margin-bottom:1.5rem;font-size:.78rem;font-family:JetBrains Mono,monospace;color:var(--muted);">💡 Visita <strong style="color:var(--text);">🎨 Paleta</strong> primero para habilitar playlists por color.</div>`}
+  ${likedBanner}
 
-<!-- MOOD / ENERGY -->
-<div style="margin-bottom:1.75rem;">
-  <p style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">🎚️ Por energía / mood</p>
-  <div class="lab-grid">${moodDefsFiltered.map(p=>labCard(p.slug,{img:p.tracks[0]?.album?.images?.[1]?.url||p.tracks[0]?.album?.images?.[0]?.url,name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji})).join('')}</div>
-</div>
+  <!-- Search -->
+  <div class="lab-search-wrap">
+    <div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);margin-bottom:.5rem;">🔍 SÍNTESIS POR TEMA</div>
+    <p style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-bottom:.625rem;">Escribe un tema y el Lab filtra en toda tu biblioteca</p>
+    <div style="position:relative;">
+      <span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);pointer-events:none;font-size:.85rem;">⚗️</span>
+      <input id="lab-title-input" placeholder="Ej: Lluvia, Workout 2020, Fiesta latina, Chill nocturno..." style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(29,185,84,.3);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.82rem;padding:.7rem 1rem .7rem 2.25rem;border-radius:10px;outline:none;transition:border-color .2s;" oninput="labSearchByTitle(this.value,window._labAllTracks||tracksData)" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='rgba(29,185,84,.3)'"/>
+    </div>
+    <div id="lab-title-results" style="margin-top:.625rem;"></div>
+  </div>
 
-<!-- EPOCH -->
-<div style="margin-bottom:1.75rem;">
-  <p style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">📅 Por época</p>
-  <div class="lab-grid">${epochDefsFiltered.map(p=>labCard(p.slug,{img:p.tracks[0]?.album?.images?.[1]?.url||p.tracks[0]?.album?.images?.[0]?.url,name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji,badge:p.tracks.length+'🎵'})).join('')}</div>
-</div>
+  <!-- Playlists inteligentes -->
+  <div class="lab-section">
+    <div class="lab-section-title">✨ PLAYLISTS INTELIGENTES</div>
+    <div class="lab-grid">${creativeDefs.map(p=>labCard(p.slug,{img:p.tracks[0]?.album?.images?.[1]?.url||p.tracks[0]?.album?.images?.[0]?.url,name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji,src:p.src})).join('')}</div>
+  </div>
 
-<!-- ARTISTS -->
-<div style="margin-bottom:1.75rem;">
-  <p style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">🎤 Por artista <span style="font-weight:400;font-family:'JetBrains Mono',monospace;font-size:.6rem;"> — todas sus canciones en tu top</span></p>
-  <div class="lab-grid">${topArtists.map(a=>labCard('artist_'+a.name,{img:a.img,name:a.name,count:a.tracks.length,color:'var(--green)',emoji:'🎤',badge:a.tracks.length+'🎵'})).join('')}</div>
-</div>
+  <!-- Color -->
+  ${colorPlaylists.length?`<div class="lab-section"><div class="lab-section-title">🎨 POR COLOR DE PORTADA</div><div class="lab-grid">${colorPlaylists.map(p=>labCard(p.slug,{name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji,colorSwatches:p.tracks})).join('')}</div></div>`:`<div style="background:rgba(192,132,252,.05);border:1px dashed rgba(192,132,252,.2);border-radius:10px;padding:.875rem 1.25rem;margin-bottom:1.5rem;font-size:.75rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">🎨 Visita <strong style="color:var(--text);">Paleta</strong> primero para habilitar playlists por color de portada</div>`}
 
-<!-- GENRES -->
-${topGenres.length?`<div style="margin-bottom:1.75rem;"><p style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;">🎸 Por género</p><div class="lab-grid">${topGenres.map((g,i)=>{const col=['#1DB954','#38bdf8','#c084fc','#fbbf24','#f87171','#fb923c','#34d399','#818cf8'][i%8];return labCard('genre_'+g.name,{img:g.img,name:g.name,count:g.tracks.length,color:col,emoji:'🎸'});}).join('')}</div></div>`:''}
+  <!-- Mood / Energy -->
+  <div class="lab-section">
+    <div class="lab-section-title">🎚️ POR ENERGÍA / MOOD</div>
+    <div class="lab-grid">${moodDefs.filter(p=>p.tracks.length).map(p=>labCard(p.slug,{img:p.tracks[0]?.album?.images?.[1]?.url||p.tracks[0]?.album?.images?.[0]?.url,name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji})).join('')}</div>
+  </div>
 
-<!-- MODAL -->
+  <!-- Época -->
+  <div class="lab-section">
+    <div class="lab-section-title">📅 POR ÉPOCA</div>
+    <div class="lab-grid">${epochDefs.filter(p=>p.tracks?.length).map(p=>labCard(p.slug,{img:p.tracks[0]?.album?.images?.[1]?.url||p.tracks[0]?.album?.images?.[0]?.url,name:p.name,count:p.tracks.length,color:p.color,emoji:p.emoji})).join('')}</div>
+  </div>
+
+  <!-- Artistas -->
+  <div class="lab-section">
+    <div class="lab-section-title">🎤 POR ARTISTA — TODA TU BIBLIOTECA</div>
+    <div class="lab-grid">${topArtists.map(a=>{const col='var(--green)';return labCard('artist_'+a.name,{img:a.img,name:a.name,count:a.tracks.length,color:col,emoji:'🎤',badge:a.tracks.length,src:a.liked>0?'liked':'top'});}).join('')}</div>
+  </div>
+
+  <!-- Géneros -->
+  ${topGenres.length?`<div class="lab-section"><div class="lab-section-title">🎸 POR GÉNERO</div><div class="lab-grid">${topGenres.map((g,i)=>{const col=['#1DB954','#38bdf8','#c084fc','#fbbf24','#f87171','#fb923c','#34d399','#818cf8'][i%8];return labCard('genre_'+g.name,{img:g.img,name:g.name,count:g.tracks.length,color:col,emoji:'🎸'});}).join('')}</div></div>`:''}
+
+</div><!-- end lab-workspace -->
+
+<!-- MODAL EDITOR -->
 <div id="lab-modal"><div class="lab-modal-box">
 <div class="lab-modal-hdr">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
     <div style="display:flex;align-items:center;gap:.625rem;">
       <div style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 1.5s ease-in-out infinite;flex-shrink:0;"></div>
       <div>
-        <div style="font-size:.5rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:.15rem;">🧪 LAB · EDITANDO</div>
+        <div style="font-size:.5rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:.1rem;">🧪 LAB · EDITANDO</div>
         <div style="font-size:1rem;font-weight:800;letter-spacing:-.03em;" id="lab-modal-title">Playlist</div>
         <div style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-top:.1rem;" id="lab-modal-sub"></div>
       </div>
     </div>
     <div style="display:flex;gap:.4rem;align-items:center;">
-      <button onclick="labShufflePlaylist()" title="Mezclar orden" style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);color:var(--green);border-radius:7px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;transition:all .15s;" onmouseover="this.style.background='rgba(29,185,84,.2)'" onmouseout="this.style.background='rgba(29,185,84,.1)'">⇄ Mix</button>
-      <button onclick="labSortByBpm()" title="Ordenar por BPM" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--accent2);border-radius:7px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;transition:all .15s;" onmouseover="this.style.background='rgba(56,189,248,.2)'" onmouseout="this.style.background='rgba(56,189,248,.1)'">↑ BPM</button>
+      <button onclick="labShufflePlaylist()" style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);color:var(--green);border-radius:7px;padding:.3rem .6rem;cursor:pointer;font-size:.75rem;transition:all .15s;" title="Mezclar" onmouseover="this.style.background='rgba(29,185,84,.2)'" onmouseout="this.style.background='rgba(29,185,84,.1)'">⇄</button>
+      <button onclick="labSortByBpm()" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--accent2);border-radius:7px;padding:.3rem .6rem;cursor:pointer;font-size:.75rem;transition:all .15s;" title="Ordenar por BPM" onmouseover="this.style.background='rgba(56,189,248,.2)'" onmouseout="this.style.background='rgba(56,189,248,.1)'">↑ BPM</button>
       <button onclick="closeLabModal()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:.3rem .65rem;cursor:pointer;font-size:.82rem;">✕</button>
     </div>
   </div>
   <div style="position:relative;">
     <span style="position:absolute;left:.7rem;top:50%;transform:translateY(-50%);font-size:.82rem;pointer-events:none;">➕</span>
-    <input id="lab-modal-add-input" placeholder="Añadir canción desde tus gustos..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.55rem 1rem .55rem 2rem;border-radius:9px;outline:none;transition:border-color .2s;" oninput="labModalSearch(this.value)" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--border)'"/>
+    <input id="lab-modal-add-input" placeholder="Buscar y añadir de tu biblioteca..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.55rem 1rem .55rem 2rem;border-radius:9px;outline:none;transition:border-color .2s;" oninput="labModalSearch(this.value)" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--border)'"/>
     <div id="lab-modal-add-results" style="position:absolute;top:calc(100% + .25rem);left:0;right:0;z-index:10;background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:180px;overflow-y:auto;display:none;box-shadow:0 8px 32px rgba(0,0,0,.4);"></div>
   </div>
 </div>
@@ -1022,6 +1132,7 @@ ${topGenres.length?`<div style="margin-bottom:1.75rem;"><p style="font-size:.65r
 </div></div>
 `;
 }
+
 
 // ── Open playlist by slug (stored in window._labPlaylists) ─────────────────
 async function openLabBySlug(slug){
@@ -1207,17 +1318,17 @@ function labRemoveTrack(idx){_labCurrentTracks.splice(idx,1);updateLabModalList(
 function closeLabModal(){document.getElementById('lab-modal').classList.remove('open');const inp=document.getElementById('lab-modal-add-input');if(inp)inp.value='';const res=document.getElementById('lab-modal-add-results');if(res){res.style.display='none';res.innerHTML='';}}
 function labModalSearch(q){
   const res=document.getElementById('lab-modal-add-results');if(!res)return;q=(q||'').toLowerCase().trim();if(!q){res.style.display='none';res.innerHTML='';return;}
-  const found=tracksData.filter(t=>t.name.toLowerCase().includes(q)||t.artists.some(a=>a.name.toLowerCase().includes(q))).slice(0,8);
+  const allSrc=window._labAllTracks||tracksData;const found=allSrc.filter(t=>t.name.toLowerCase().includes(q)||t.artists.some(a=>a.name.toLowerCase().includes(q))).slice(0,10);
   if(!found.length){res.style.display='block';res.innerHTML='<div style="padding:.75rem 1rem;font-size:.72rem;font-family:JetBrains Mono,monospace;color:var(--muted);">Sin resultados</div>';return;}
   res.style.display='block';res.innerHTML=found.map(t=>{const cover=t.album?.images?.[2]?.url||t.album?.images?.[0]?.url,inList=_labCurrentTracks.some(x=>x.id===t.id),idx=tracksData.indexOf(t);
   return`<div style="display:flex;align-items:center;gap:.6rem;padding:.45rem .875rem;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .12s;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${cover?`<img src="${cover}" style="width:28px;height:28px;border-radius:5px;object-fit:cover;flex-shrink:0;">`:'<div style="width:28px;height:28px;border-radius:5px;background:var(--green-dim);flex-shrink:0;"></div>'}<div style="flex:1;min-width:0;"><div style="font-size:.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.name)}</div><div style="font-size:.62rem;font-family:JetBrains Mono,monospace;color:var(--muted);">${escHtml(t.artists[0]?.name||'')}</div></div>${inList?'<span style="font-size:.62rem;color:var(--green);flex-shrink:0;">✓ en lista</span>':`<button style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);color:var(--green);font-size:.65rem;padding:.2rem .6rem;border-radius:6px;cursor:pointer;font-weight:700;flex-shrink:0;" onclick="labModalAddTrack(${idx});event.stopPropagation();">+ Agregar</button>`}</div>`;}).join('');
 }
-function labModalAddTrack(idx){const t=tracksData[idx];if(!t||_labCurrentTracks.some(x=>x.id===t.id))return;_labCurrentTracks.push(t);updateLabModalList();showToast('✓ '+t.name+' agregada');const inp=document.getElementById('lab-modal-add-input');const res=document.getElementById('lab-modal-add-results');if(inp)inp.value='';if(res){res.style.display='none';res.innerHTML='';}}
-function labSearchByTitle(q){
+function labModalAddTrack(idx){const src=window._labAllTracks||tracksData;const t=src[idx];if(!t||_labCurrentTracks.some(x=>x.id===t.id))return;_labCurrentTracks.push(t);updateLabModalList();showToast('✓ '+t.name+' agregada');const inp=document.getElementById('lab-modal-add-input');const res=document.getElementById('lab-modal-add-results');if(inp)inp.value='';if(res){res.style.display='none';res.innerHTML='';}}
+function labSearchByTitle(q,trackSet){
   clearTimeout(_labSearchDebounce);const res=document.getElementById('lab-title-results');if(!q||q.trim().length<2){if(res)res.innerHTML='';return;}
   _labSearchDebounce=setTimeout(()=>{
     window._labSearchTitle=q.trim();const qWords=q.toLowerCase().trim().split(/\s+/);
-    const scored=tracksData.map(t=>{let score=0;const n=t.name.toLowerCase(),ar=t.artists.map(a=>a.name).join(' ').toLowerCase(),g=(t._genres||[]).join(' ').toLowerCase(),al=(t.album?.name||'').toLowerCase();qWords.forEach(w=>{if(n.includes(w))score+=3;if(g.includes(w))score+=2;if(ar.includes(w))score+=2;if(al.includes(w))score+=1;});return{t,score};}).filter(s=>s.score>0).sort((a,b)=>b.score-a.score).slice(0,15);
+    const scored=(trackSet||tracksData).map(t=>{let score=0;const n=t.name.toLowerCase(),ar=t.artists.map(a=>a.name).join(' ').toLowerCase(),g=(t._genres||[]).join(' ').toLowerCase(),al=(t.album?.name||'').toLowerCase();qWords.forEach(w=>{if(n.includes(w))score+=3;if(g.includes(w))score+=2;if(ar.includes(w))score+=2;if(al.includes(w))score+=1;});return{t,score};}).filter(s=>s.score>0).sort((a,b)=>b.score-a.score).slice(0,15);
     if(!scored.length){res.innerHTML='<div style="padding:.75rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-size:.78rem;font-family:JetBrains Mono,monospace;color:var(--muted);">No encontramos canciones relacionadas con ese tema en tus gustos.</div>';return;}
     window._labSearchMatches=scored.map(s=>s.t);
     res.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;"><span style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">${scored.length} canciones encajan</span><button onclick="openLabPlaylist('search',window._labSearchMatches)" style="background:var(--green);color:#000;font-family:'Syne',sans-serif;font-weight:700;font-size:.75rem;padding:.35rem 1rem;border-radius:100px;border:none;cursor:pointer;">Crear playlist →</button></div>`
