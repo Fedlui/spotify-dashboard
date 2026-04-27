@@ -185,6 +185,30 @@ input:focus,select:focus{border-color:var(--green);}
 .lab-modal-list::-webkit-scrollbar{width:4px;}
 .lab-modal-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 .lab-track-row{display:flex;align-items:center;gap:.625rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem;transition:all .15s;}
+/* Drag & Drop Lab rows */
+.lab-dnd-row{display:flex;align-items:center;gap:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.45rem .625rem;transition:all .15s;cursor:default;position:relative;}
+.lab-dnd-row.lab-dnd-filled{border-color:rgba(29,185,84,.4);background:rgba(29,185,84,.06);}
+.lab-dnd-row.lab-dnd-dragging{opacity:.4;border-color:var(--green);transform:scale(.98);}
+.lab-dnd-row.lab-dnd-over{border-color:var(--green);border-style:dashed;background:rgba(29,185,84,.1);transform:translateY(-2px);}
+.lab-dnd-handle{color:var(--muted);font-size:.9rem;cursor:grab;padding:0 .15rem;flex-shrink:0;user-select:none;line-height:1;}
+.lab-dnd-handle:active{cursor:grabbing;}
+.lab-dnd-num{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;}
+.lab-dnd-cover{width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;}
+.lab-dnd-cover-ph{width:36px;height:36px;border-radius:6px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.85rem;}
+.lab-dnd-info{flex:1;min-width:0;}
+.lab-dnd-name{font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lab-dnd-artist{font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+.lab-dnd-pop-bar{height:2px;background:rgba(255,255,255,.07);border-radius:1px;margin-top:.25rem;overflow:hidden;}
+.lab-dnd-pop-fill{height:100%;border-radius:1px;transition:width .4s;}
+.lab-dnd-bpm{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--green);text-align:center;flex-shrink:0;min-width:30px;line-height:1.2;}
+.lab-dnd-sp{background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.2);border-radius:5px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:.62rem;flex-shrink:0;transition:background .15s;color:var(--green);}
+.lab-dnd-sp:hover{background:rgba(29,185,84,.25);}
+.lab-dnd-rm{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);color:var(--red);font-size:.62rem;width:22px;height:22px;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;transition:all .15s;}
+.lab-dnd-rm:hover{background:rgba(248,113,113,.25);}
+.lab-rec-badge{font-size:.52rem;font-family:JetBrains Mono,monospace;color:var(--green);background:rgba(29,185,84,.12);border:1px solid rgba(29,185,84,.28);border-radius:4px;padding:.1rem .35rem;flex-shrink:0;white-space:nowrap;}
+/* Lab modal header scan line */
+.lab-modal-hdr{padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);flex-shrink:0;position:relative;overflow:hidden;}
+.lab-modal-hdr::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent);animation:scan 2.5s linear infinite;}
 .lab-track-cover{width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;}
 .lab-track-cover-ph{width:38px;height:38px;border-radius:6px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .lab-track-info{flex:1;min-width:0;}
@@ -425,17 +449,19 @@ async function fetchEnrichedData(){
 }
 async function spotifyFetch(path){const res=await fetch(`https://api.spotify.com/v1${path}`,{headers:{'Authorization':`Bearer ${accessToken}`}});if(!res.ok){if(res.status===401){logout();throw new Error('Sesión expirada.');}throw new Error(`Spotify API error: ${res.status}`);}return res.json();}
 async function spotifyPost(path,body){
-  const res=await fetch(`https://api.spotify.com/v1${path}`,{method:'POST',headers:{'Authorization':`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch('https://api.spotify.com/v1'+path,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
   if(!res.ok){
-    let errMsg=`Spotify API error: ${res.status}`;
-    try{const e=await res.json();errMsg+=` — ${e.error?.message||JSON.stringify(e)}`;}catch(e2){}
-    throw new Error(errMsg);
+    let msg='Spotify API error: '+res.status;
+    try{const j=await res.clone().json();msg+=' — '+(j.error?.message||JSON.stringify(j));}catch(x){}
+    throw new Error(msg);
   }
-  // Some endpoints (like adding tracks) return 201 with snapshot_id, others return full object
-  const ct=res.headers.get('content-type')||'';
-  if(ct.includes('json')&&res.status!==204){try{return await res.json();}catch(e){return {};}}
-  return {};
+  try{return await res.json();}catch(x){return {};}
 }
+
 function renderUser(profile){const name=profile.display_name||profile.id;document.getElementById('user-display-name').textContent=name;document.getElementById('user-meta').textContent=`${profile.followers?.total?.toLocaleString()||0} seguidores · ${profile.country||''}`;const wrap=document.getElementById('user-avatar-wrap');wrap.innerHTML=profile.images?.[0]?.url?`<img class="user-avatar" src="${profile.images[0].url}" alt="${name}">`:`<div class="user-avatar-placeholder">${name[0].toUpperCase()}</div>`;}
 function renderStats(){
   const avgPop=tracksData.length?Math.round(tracksData.reduce((s,t)=>s+(t.popularity||0),0)/tracksData.length):null;
@@ -471,10 +497,16 @@ const EXPORT_FIELDS=[
   {id:'listeners',label:'Oyentes',icon:'👥'},{id:'playcount',label:'Plays Last.fm',icon:'▶'},
   {id:'popularity',label:'Popularidad Spotify',icon:'📊'},{id:'genres',label:'Géneros',icon:'🎸'},
   {id:'album',label:'Álbum',icon:'💿'},{id:'spotify_url',label:'URL Spotify',icon:'🔗'},
-  {id:'lyrics',label:'Letra (Genius)',icon:'📝'},
+  {id:'lyrics',label:'Letra completa',icon:'📝'},
+  {id:'album',label:'Álbum',icon:'💿'},
+  {id:'energy',label:'Energía / Acústica / Liveness',icon:'⚡'},
+  {id:'danceability',label:'Bailabilidad',icon:'💃'},
+  {id:'valence',label:'Mood (Positividad)',icon:'😊'},
+  {id:'loudness',label:'Volumen (dB)',icon:'🔈'},
+  {id:'key',label:'Compás y Tonalidad',icon:'🔑'},
 ];
 // Defaults: nombre, artista, año, duración, BPM, tonalidad, oyentes, popularidad, géneros
-let _exportSelectedFields=['rank','name','artist','year','duration','bpm','key','listeners','popularity','genres'];
+let _exportSelectedFields=['rank','name','artist','year','duration','bpm','key','mode','loudness','danceability','valence','energy','genres','lyrics','album','spotify_url','listeners','popularity'];
 let _exportRange=null;
 function exportData(){showExportModal();}
 function showExportModal(){
@@ -506,82 +538,166 @@ function toggleEF(id,checked){if(checked){if(!_exportSelectedFields.includes(id)
 function exportSelAll(){EXPORT_FIELDS.forEach(f=>{if(!_exportSelectedFields.includes(f.id))_exportSelectedFields.push(f.id);const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=true;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--green)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent=_exportSelectedFields.length+' campos · '+tracksData.length+' canciones';}
 function exportSelNone(){_exportSelectedFields=[];EXPORT_FIELDS.forEach(f=>{const cb=document.querySelector('[data-efield="'+f.id+'"]');if(cb)cb.checked=false;const lbl=document.getElementById('ef-lbl-'+f.id);if(lbl)lbl.style.borderColor='var(--border)';});const cnt=document.getElementById('ef-count');if(cnt)cnt.textContent='0 campos · '+tracksData.length+' canciones';}
 
-// Lyrics cache: fetched from lyrics.ovh (free, no key needed)
-// Called before export to pre-fetch all lyrics
+// Lyrics: fetch from lyrics.ovh with timeout + parallel batches
 async function fetchAllLyricsForExport(onProgress){
-  const toFetch=tracksData.filter(t=>!t._lyricsText);
+  const toFetch=tracksData.filter(t=>!t._lyricsText&&t._lyrics!==false);
+  if(!toFetch.length)return;
   let done=0;
-  // Batch with delay to avoid rate limiting
-  for(const t of toFetch){
+
+  const fetchOne=async(t)=>{
     try{
-      const artist=encodeURIComponent(t.artists[0]?.name||'');
-      const title=encodeURIComponent(t.name);
-      const res=await fetch('https://api.lyrics.ovh/v1/'+artist+'/'+title);
-      if(res.ok){
+      const ctrl=new AbortController();
+      const tid=setTimeout(()=>ctrl.abort(),4000); // 4s timeout per song
+      const artist=encodeURIComponent((t.artists[0]?.name||'').replace(/[()[\]]/g,'').trim());
+      const title =encodeURIComponent(t.name.replace(/\s*\([^)]*\)/g,'').replace(/[()[\]]/g,'').trim());
+      const res=await fetch('https://api.lyrics.ovh/v1/'+artist+'/'+title,{signal:ctrl.signal});
+      clearTimeout(tid);
+      if(res.status===404){t._lyrics=false;} // mark as not found — skip next time
+      else if(res.ok){
         const d=await res.json();
-        if(d.lyrics) t._lyricsText=d.lyrics.trim();
+        if(d&&d.lyrics){
+          // Clean the lyrics: remove ads, normalize line endings
+          t._lyricsText=d.lyrics
+            .replace(/\r\n/g,'\n').replace(/\r/g,'\n')
+            .replace(/^Paroles de la chanson.+\n?/im,'')
+            .replace(/^You might also like\n?/im,'')
+            .trim();
+        } else t._lyrics=false;
       }
-    }catch(e){}
+    }catch(e){
+      t._lyrics=false; // timeout — mark to skip
+    }
     done++;
-    if(onProgress) onProgress(done,toFetch.length);
-    await new Promise(r=>setTimeout(r,120)); // ~8 req/s, stay under limit
+    if(onProgress)onProgress(done,toFetch.length);
+  };
+
+  // Process in batches of 5 concurrent to go faster
+  const BATCH=5;
+  for(let i=0;i<toFetch.length;i+=BATCH){
+    const batch=toFetch.slice(i,i+BATCH);
+    await Promise.all(batch.map(fetchOne));
+    if(i+BATCH<toFetch.length) await new Promise(r=>setTimeout(r,200));
   }
 }
 
 function getLyricsForTrack(track){
-  if(!track) return 'N/A';
+  if(!track)return'N/A';
   return track._lyricsText||'N/A';
 }
 
-async function doExportJSON(){
-  const NA='N/A',fields=_exportSelectedFields;if(!fields.length){showToast('⚠ Selecciona al menos un campo');return;}
 
-  // If lyrics field selected, fetch them first
+async function doExportJSON(){
+  const NA='N/A', fields=_exportSelectedFields;
+  if(!fields.length){showToast('⚠ Selecciona al menos un campo');return;}
+
+  // Step 1: If lyrics selected, fetch them all with timeout+batching
   if(fields.includes('lyrics')){
     const cnt=document.getElementById('ef-count');
-    const origText=cnt?cnt.textContent:'';
+    const origTxt=cnt?cnt.textContent:'';
     if(cnt) cnt.textContent='Descargando letras... 0/'+tracksData.length;
     await fetchAllLyricsForExport((done,total)=>{
       if(cnt) cnt.textContent='Descargando letras... '+done+'/'+total;
     });
-    if(cnt) cnt.textContent=origText;
+    if(cnt) cnt.textContent=origTxt;
   }
 
-  // Estructura: cada canción = una fila, cada campo = una columna
-  // Array de objetos: [{campo1:val, campo2:val, ...}, ...]
-  // Así en Excel/Sheets: fila 1 = encabezados, fila 2+ = canciones
-  const rows=tracksData.map((t,idx)=>{
-    const mins=Math.floor(t.duration_ms/60000),secs=Math.floor((t.duration_ms%60000)/1000).toString().padStart(2,'0');
-    const listeners=t._listeners||(t.popularity!=null?Math.round(1000*Math.exp(t.popularity*.115)):null);
-    const row={};
-    if(fields.includes('rank'))        row['#']                    =idx+1;
-    if(fields.includes('name'))        row['Nombre']               =t.name||NA;
-    if(fields.includes('artist'))      row['Artista']              =t.artists?.map(a=>a.name).join(', ')||NA;
-    if(fields.includes('year'))        row['Año']                  =t.album?.release_date?.split('-')[0]||NA;
-    if(fields.includes('duration'))    row['Duración']             =t.duration_ms?mins+':'+secs:NA;
-    if(fields.includes('bpm'))         row['BPM']                  =t._audio?.bpm||NA;
-    if(fields.includes('key'))         row['Tonalidad']            =t._audio?.key!=null?KEY_NAMES[parseInt(t._audio.key)]:NA;
-    if(fields.includes('mode'))        row['Modo']                 =t._audio?.mode===1||t._audio?.mode==='1'?'Mayor':t._audio?.mode===0||t._audio?.mode==='0'?'Menor':NA;
-    if(fields.includes('loudness'))    row['Volumen_dB']           =t._audio?.loudness||NA;
-    if(fields.includes('energy'))      row['Energía_%']            =t._audio?.energy!=null?Math.round(t._audio.energy*100):NA;
-    if(fields.includes('danceability'))row['Bailabilidad_%']       =t._audio?.danceability!=null?Math.round(t._audio.danceability*100):NA;
-    if(fields.includes('valence'))     row['Mood_%']               =t._audio?.valence!=null?Math.round(t._audio.valence*100):NA;
-    if(fields.includes('listeners'))   row['Oyentes']              =listeners||NA;
-    if(fields.includes('playcount'))   row['Plays_LastFM']         =t._playcount||NA;
-    if(fields.includes('popularity'))  row['Popularidad_Spotify']  =t.popularity!=null?t.popularity:NA;
-    if(fields.includes('genres'))      row['Géneros']              =(t._genres||[]).length?t._genres.join(', '):NA;
-    if(fields.includes('album'))       row['Álbum']                =t.album?.name||NA;
-    if(fields.includes('spotify_url')) row['URL_Spotify']          =t.external_urls?.spotify||NA;
-    if(fields.includes('lyrics'))      row['Letra']                =getLyricsForTrack(t)||NA;
+  // Step 2: Build rows with EXACT musicstax-compatible field names
+  const rows = tracksData.map((t, idx) => {
+    const totalSecs   = Math.round((t.duration_ms||0) / 1000);
+    const mins        = Math.floor(totalSecs / 60);
+    const secs        = String(totalSecs % 60).padStart(2,'0');
+    const durStr      = `${mins}:${secs}`;
+    const durSecs     = totalSecs; // en segundos, no fracción
+
+    // Popularity: real value or N/A (never fake)
+    const pop = (t.popularity !== null && t.popularity !== undefined) ? t.popularity : NA;
+
+    // Listeners from Last.fm or estimate
+    const listeners = t._listeners
+      ? t._listeners.toLocaleString()
+      : (t.popularity != null ? Math.round(1000*Math.exp(t.popularity*.115)).toLocaleString() : NA);
+
+    // Compás: texto limpio (no fracción para evitar que Excel lo lea como fecha)
+    const sigMap = {'4/4':'4 por 4','3/4':'3 por 4','6/8':'6 por 8','2/4':'2 por 4','5/4':'5 por 4'};
+    const sigRaw = t._audio?.time_signature || NA;
+    const sigClean = sigMap[sigRaw] || (sigRaw !== NA ? sigRaw.replace('/','_') : NA);
+
+    // Volumen: número limpio en dB
+    const loudRaw = t._audio?.loudness;
+    const loud = loudRaw ? parseFloat(loudRaw).toFixed(1) + ' dB' : NA;
+
+    // Key: note name
+    const keyNum = t._audio?.key;
+    const keyName = (keyNum != null && !isNaN(keyNum)) ? KEY_NAMES[parseInt(keyNum)] : NA;
+
+    // Mode: Mayor / Menor
+    const modeVal = t._audio?.mode;
+    const modeStr = modeVal===1||modeVal==='1' ? 'Mayor' : modeVal===0||modeVal==='0' ? 'Menor' : NA;
+
+    // Percentages as 0-100 integers
+    const pct = (v) => (v != null) ? Math.round(v*100) : NA;
+
+    // Genre: from Last.fm tags or N/A — never empty
+    const genre = (t._genres && t._genres.length) ? t._genres.join(', ') : NA;
+
+    // Lyrics: full text or N/A
+    const lyrics = t._lyricsText ? t._lyricsText.trim().replace(/\r\n/g,'\n').replace(/\r/g,'\n') : NA;
+
+    // Video musical: YouTube search link
+    const artist0 = t.artists?.[0]?.name || '';
+    const ytUrl   = 'https://www.youtube.com/results?search_query='+encodeURIComponent(t.name+' '+artist0+' official video');
+
+    // Album name
+    const album = t.album?.name || NA;
+
+    // Spotify popularity index (raw 0-100 or N/A)
+    const popIndex = pop !== NA ? pop : NA;
+
+    const row = {};
+
+    // Always include rank
+    if(fields.includes('rank'))         row.rank               = idx + 1;
+
+    // musicstax exact names
+    if(fields.includes('name'))         row.track_name         = t.name || NA;
+    if(fields.includes('artist'))       row.artist_name        = t.artists?.map(a=>a.name).join(', ') || NA;
+    if(fields.includes('year'))         row.released_year      = t.album?.release_date?.split('-')[0] || NA;
+    if(fields.includes('popularity'))   row.popularity         = popIndex;
+    if(fields.includes('duration'))     { row.duration = durStr; row.duration_seconds = durSecs; }
+    if(fields.includes('bpm'))          row.bpm                = t._audio?.bpm || NA;
+    if(fields.includes('key'))          { row.signature = sigClean; row.key = keyName; }
+    if(fields.includes('mode'))         row.mode               = modeStr;
+    if(fields.includes('loudness'))     row.loudness           = loud;
+    if(fields.includes('danceability')) row.danceability       = pct(t._audio?.danceability);
+    if(fields.includes('valence'))      row.valence            = pct(t._audio?.valence);
+    if(fields.includes('energy'))       row.energy             = pct(t._audio?.energy);
+    // musicstax fields we estimate (no real source yet)
+    if(fields.includes('energy'))       row.acousticness       = NA; // no disponible
+    if(fields.includes('energy'))       row.instrumentalness   = NA;
+    if(fields.includes('energy'))       row.liveness           = NA;
+    if(fields.includes('energy'))       row.speechiness        = NA;
+    if(fields.includes('genres'))       row.genre              = genre;
+    if(fields.includes('listeners'))    row.oyentes            = listeners;
+    if(fields.includes('album'))        row.album              = album;
+    if(fields.includes('spotify_url'))  row.spotify_url        = t.external_urls?.spotify || NA;
+    if(fields.includes('lyrics'))       row.lyrics             = lyrics;
+    // Video musical — always a YouTube search link
+    if(fields.includes('spotify_url'))  row.video_musical      = ytUrl;
+
     return row;
   });
 
-  // JSON bien formateado: array de filas, indentado para legibilidad
-  const rl={short_term:'1mes',medium_term:'6meses',long_term:'todo'};
-  const jsonStr=JSON.stringify(rows,null,2);
-  const blob=new Blob([jsonStr],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download='spotify-top-'+(rl[_exportRange||currentRange]||'export')+'-'+fields.length+'campos.json';a.click();URL.revokeObjectURL(url);
-  showToast('✓ JSON exportado · '+rows.length+' canciones · '+fields.length+' campos');document.getElementById('export-modal-ov')?.remove();
+  const rl = {short_term:'1mes', medium_term:'6meses', long_term:'todo'};
+  const jsonStr = JSON.stringify(rows, null, 2);
+  const blob = new Blob([jsonStr], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'spotify-top-'+(rl[_exportRange||currentRange]||'export')+'-'+fields.length+'campos.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ JSON exportado · '+rows.length+' canciones · '+fields.length+' campos');
+  document.getElementById('export-modal-ov')?.remove();
 }
 
 
@@ -743,9 +859,19 @@ ${topGenres.length?`<div style="margin-bottom:1.75rem;"><p style="font-size:.65r
 <div id="lab-modal"><div class="lab-modal-box">
 <div class="lab-modal-hdr">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-    <div><div style="font-size:1.05rem;font-weight:800;letter-spacing:-.03em;" id="lab-modal-title">Playlist</div>
-    <div style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-top:.1rem;" id="lab-modal-sub"></div></div>
-    <button onclick="closeLabModal()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.3rem .65rem;cursor:pointer;font-size:.82rem;">✕</button>
+    <div style="display:flex;align-items:center;gap:.625rem;">
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 1.5s ease-in-out infinite;flex-shrink:0;"></div>
+      <div>
+        <div style="font-size:.5rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:.15rem;">🧪 LAB · EDITANDO</div>
+        <div style="font-size:1rem;font-weight:800;letter-spacing:-.03em;" id="lab-modal-title">Playlist</div>
+        <div style="font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-top:.1rem;" id="lab-modal-sub"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:.4rem;align-items:center;">
+      <button onclick="labShufflePlaylist()" title="Mezclar orden" style="background:rgba(29,185,84,.1);border:1px solid rgba(29,185,84,.25);color:var(--green);border-radius:7px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;transition:all .15s;" onmouseover="this.style.background='rgba(29,185,84,.2)'" onmouseout="this.style.background='rgba(29,185,84,.1)'">⇄ Mix</button>
+      <button onclick="labSortByBpm()" title="Ordenar por BPM" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--accent2);border-radius:7px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;transition:all .15s;" onmouseover="this.style.background='rgba(56,189,248,.2)'" onmouseout="this.style.background='rgba(56,189,248,.1)'">↑ BPM</button>
+      <button onclick="closeLabModal()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:.3rem .65rem;cursor:pointer;font-size:.82rem;">✕</button>
+    </div>
   </div>
   <div style="position:relative;">
     <span style="position:absolute;left:.7rem;top:50%;transform:translateY(-50%);font-size:.82rem;pointer-events:none;">➕</span>
@@ -861,30 +987,88 @@ function colorEmoji(name){return{Rojo:'🔴',Naranja:'🟠',Amarillo:'🟡',Verd
 
 function updateLabModalList(){
   const list=document.getElementById('lab-modal-list'),count=document.getElementById('lab-modal-count');if(!list)return;
-  const totalMin=Math.round(_labCurrentTracks.reduce((s,t)=>s+(t.duration_ms||200000),0)/60000);
+  const totalSec=Math.round(_labCurrentTracks.reduce((s,t)=>s+(t.duration_ms||200000),0)/1000);
+  const mins=Math.floor(totalSec/60),secs=totalSec%60;
   const orig=_labCurrentTracks.filter(t=>!t._filled).length,recs=_labCurrentTracks.filter(t=>t._filled).length;
-  count.textContent=orig+' canciones'+(recs?' + '+recs+' recomendaciones':'');
-  list.innerHTML=_labCurrentTracks.length?_labCurrentTracks.map((t,i)=>{
-    const cover=t.album?.images?.[2]?.url||t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
-    const bpm=t._audio?.bpm?t._audio.bpm+' BPM':'',yr=(t.album?.release_date||'').split('-')[0]||'';
-    const sp=t.external_urls?.spotify||'https://open.spotify.com/search/'+encodeURIComponent(t.name+' '+t.artists[0]?.name);
-    const isFilled=t._filled===true;
-    // Filled (recommended) = green tinted row
-    const rowStyle=isFilled?'border-color:rgba(29,185,84,.45);background:rgba(29,185,84,.06);':'';
-    const filledBadge=isFilled?'<span style="font-size:.52rem;font-family:JetBrains Mono,monospace;color:var(--green);background:rgba(29,185,84,.15);border:1px solid rgba(29,185,84,.3);border-radius:4px;padding:.1rem .4rem;flex-shrink:0;white-space:nowrap;">✦ rec</span>':'';
-    return '<div class="lab-track-row" style="'+rowStyle+'">'
-      +(cover?'<img class="lab-track-cover" src="'+cover+'" alt="">'
-             :'<div class="lab-track-cover-ph" style="'+(isFilled?'color:var(--green);background:rgba(29,185,84,.12);':'')+'">'+(isFilled?'✦':'♪')+'</div>')
-      +'<div class="lab-track-info">'
-      +'<div class="lab-track-name" style="'+(isFilled?'color:rgba(200,255,210,.9);':'')+'">'+(escHtml(t.name))+'</div>'
-      +'<div class="lab-track-artist">'+(escHtml(t.artists.map(a=>a.name).join(', ')))+(yr?' · '+yr:'')+'</div>'
-      +'</div>'
-      +filledBadge
-      +'<span class="lab-track-bpm">'+bpm+'</span>'
-      +'<button class="lab-rm-btn" onclick="labRemoveTrack('+i+')" title="Quitar">✕</button>'
-      +'<a href="'+sp+'" target="_blank" class="lab-sp-btn" title="Ver en Spotify">▶</a>'
-      +'</div>';
-  }).join(''):'<div style="text-align:center;padding:2rem;color:var(--muted);font-family:JetBrains Mono,monospace;font-size:.78rem;">Sin canciones. Usa el buscador de arriba.</div>';
+  count.textContent=_labCurrentTracks.length+' tracks · '+mins+'m '+secs+'s'+(recs?' · +'+recs+' recs':'');
+
+  list.innerHTML=_labCurrentTracks.length
+    ? _labCurrentTracks.map((t,i)=>{
+        const cover=t.album?.images?.[2]?.url||t.album?.images?.[1]?.url||t.album?.images?.[0]?.url;
+        const bpm=t._audio?.bpm||'—',yr=(t.album?.release_date||'').split('-')[0]||'';
+        const pop=t.popularity||0;
+        const sp=t.external_urls?.spotify||'https://open.spotify.com/search/'+encodeURIComponent(t.name+' '+(t.artists[0]?.name||''));
+        const isFilled=t._filled===true;
+        const hpCol=pop>70?'#1DB954':pop>40?'#fbbf24':'#f87171';
+        return `<div class="lab-dnd-row ${isFilled?'lab-dnd-filled':''}"
+          draggable="true"
+          data-idx="${i}"
+          ondragstart="labDragStart(event,${i})"
+          ondragover="labDragOver(event)"
+          ondrop="labDrop(event,${i})"
+          ondragend="labDragEnd(event)"
+          ondragleave="labDragLeave(event)">
+          <div class="lab-dnd-handle" title="Arrastrar para reordenar">⠿</div>
+          <div class="lab-dnd-num">${i+1}</div>
+          ${cover
+            ? `<img class="lab-dnd-cover" src="${cover}" alt="" onerror="this.style.display='none'">`
+            : `<div class="lab-dnd-cover-ph">${isFilled?'✦':'♪'}</div>`}
+          <div class="lab-dnd-info">
+            <div class="lab-dnd-name">${escHtml(t.name)}</div>
+            <div class="lab-dnd-artist">${escHtml(t.artists.map(a=>a.name).join(', '))}${yr?' · '+yr:''}</div>
+            <div class="lab-dnd-pop-bar"><div class="lab-dnd-pop-fill" style="width:${pop}%;background:${hpCol};"></div></div>
+          </div>
+          ${isFilled?'<span class="lab-rec-badge">✦ rec</span>':''}
+          <span class="lab-dnd-bpm">${bpm}<br><span style="font-size:.52rem;opacity:.6;">BPM</span></span>
+          <a href="${sp}" target="_blank" class="lab-dnd-sp" title="Abrir en Spotify" onclick="event.stopPropagation()">▶</a>
+          <button class="lab-dnd-rm" onclick="labRemoveTrack(${i})" title="Quitar">✕</button>
+        </div>`;
+      }).join('')
+    : '<div style="text-align:center;padding:3rem;color:var(--muted);font-family:JetBrains Mono,monospace;font-size:.78rem;border:1px dashed var(--border);border-radius:12px;margin:.5rem;">Sin canciones · arrastra o busca arriba</div>';
+
+  // Re-attach drag listeners after render
+  list.querySelectorAll('.lab-dnd-row').forEach(row=>{
+    row.addEventListener('dragstart',e=>labDragStart(e,parseInt(row.dataset.idx)));
+    row.addEventListener('dragover',labDragOver);
+    row.addEventListener('drop',e=>labDrop(e,parseInt(row.dataset.idx)));
+    row.addEventListener('dragend',labDragEnd);
+    row.addEventListener('dragleave',labDragLeave);
+  });
+}
+
+// Drag & Drop reordering
+let _dragIdx=null,_dragEl=null;
+function labDragStart(e,idx){
+  _dragIdx=idx;_dragEl=e.currentTarget;
+  e.currentTarget.classList.add('lab-dnd-dragging');
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',idx);
+}
+function labDragOver(e){
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  const row=e.currentTarget;if(row===_dragEl)return;
+  row.classList.add('lab-dnd-over');
+}
+function labDragLeave(e){e.currentTarget.classList.remove('lab-dnd-over');}
+function labDragEnd(e){
+  document.querySelectorAll('.lab-dnd-row').forEach(r=>{r.classList.remove('lab-dnd-dragging','lab-dnd-over');});
+  _dragIdx=null;_dragEl=null;
+}
+function labDrop(e,toIdx){
+  e.preventDefault();e.currentTarget.classList.remove('lab-dnd-over');
+  if(_dragIdx===null||_dragIdx===toIdx)return;
+  const moved=_labCurrentTracks.splice(_dragIdx,1)[0];
+  _labCurrentTracks.splice(toIdx,0,moved);
+  updateLabModalList();
+}
+
+function labShufflePlaylist(){
+  for(let i=_labCurrentTracks.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_labCurrentTracks[i],_labCurrentTracks[j]]=[_labCurrentTracks[j],_labCurrentTracks[i]];}
+  updateLabModalList();showToast('⇄ Playlist mezclada');
+}
+function labSortByBpm(){
+  _labCurrentTracks.sort((a,b)=>(a._audio?.bpm||0)-(b._audio?.bpm||0));
+  updateLabModalList();showToast('↑ Ordenada por BPM: lento → rápido');
 }
 
 function labRemoveTrack(idx){_labCurrentTracks.splice(idx,1);updateLabModalList();}
@@ -912,49 +1096,59 @@ function labSearchByTitle(q){
 async function createSpotifyPlaylist(){
   if(!_labCurrentTracks.length){showToast('⚠ Sin canciones en la playlist');return;}
   const btn=document.getElementById('lab-create-btn');
+  const origHTML=btn.innerHTML;
   btn.disabled=true;btn.textContent='Creando...';btn.style.opacity='.7';
   try{
-    // Only real Spotify tracks (not fake filled_ IDs from LFM recs)
-    const valid=_labCurrentTracks.filter(t=>t.id&&typeof t.id==='string'&&!t.id.startsWith('filled_'));
+    // Only real Spotify tracks (exclude fake filled_ IDs)
+    const valid=_labCurrentTracks.filter(t=>
+      t.id && typeof t.id==='string' && !t.id.startsWith('filled_') && t.id.trim().length>5
+    );
     if(!valid.length){
-      btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';
-      showToast('⚠ No hay canciones de tu Spotify en esta playlist',4000);return;
+      btn.disabled=false;btn.innerHTML=origHTML;btn.style.opacity='1';
+      showToast('⚠ No hay canciones de Spotify en esta playlist',4000);return;
     }
-
     const title=document.getElementById('lab-modal-title').textContent||'Mi Playlist';
-    btn.textContent='Creando "'+title.slice(0,20)+'"...';
 
-    // Step 1: create the playlist
+    // 1. Create playlist
+    btn.textContent='Creando playlist...';
     const playlist=await spotifyPost('/me/playlists',{
-      name:title,
-      description:'Creada con Spotify Pulse 🎵',
-      public:false
+      name:title,description:'Creada con Spotify Pulse 🎵',public:false
     });
-    if(!playlist.id) throw new Error('No se recibió ID de playlist de Spotify');
+    if(!playlist||!playlist.id) throw new Error('Spotify no devolvió ID de playlist');
 
-    // Step 2: add tracks in chunks of 100
-    const uris=valid.map(t=>'spotify:track:'+t.id);
+    // 2. Add tracks — use PUT first chunk then POST for additional chunks
+    //    PUT replaces all, POST appends — safer to use POST for all
+    const uris=valid.map(t=>'spotify:track:'+t.id.trim());
     btn.textContent='Agregando '+uris.length+' canciones...';
+
     for(let i=0;i<uris.length;i+=100){
-      await spotifyPost('/playlists/'+playlist.id+'/tracks',{uris:uris.slice(i,i+100)});
+      const chunk=uris.slice(i,i+100);
+      const addRes=await fetch('https://api.spotify.com/v1/playlists/'+playlist.id+'/tracks',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({uris:chunk})
+      });
+      if(!addRes.ok){
+        let msg='Error agregando canciones: '+addRes.status;
+        try{const j=await addRes.json();msg+=' — '+(j.error?.message||'');}catch(x){}
+        throw new Error(msg);
+      }
     }
 
     // Success
     btn.disabled=false;
-    btn.textContent='✓ '+uris.length+' canciones en Spotify';
+    btn.textContent='✓ '+valid.length+' canciones en Spotify';
     btn.style.background='#22e065';btn.style.color='#000';btn.style.opacity='1';
-    showToast('✓ "'+title+'" creada con '+uris.length+' canciones',5000);
+    showToast('✓ "'+title+'" — '+valid.length+' canciones agregadas en Spotify',5000);
     if(playlist.external_urls?.spotify) setTimeout(()=>window.open(playlist.external_urls.spotify,'_blank'),700);
-    setTimeout(()=>{btn.textContent='Crear en Spotify';btn.style.background='var(--green)';},6000);
+    setTimeout(()=>{btn.innerHTML=origHTML;btn.style.background='var(--green)';btn.style.color='#000';},6000);
 
   }catch(e){
-    btn.disabled=false;btn.textContent='Crear en Spotify';btn.style.opacity='1';btn.style.background='var(--green)';
-    console.error('[playlist]',e.message);
-    // Show the real Spotify error message, not a generic one
-    showToast('Error Spotify: '+e.message.replace('Spotify API error: ',''),6000);
+    btn.disabled=false;btn.innerHTML=origHTML;btn.style.opacity='1';btn.style.background='var(--green)';
+    console.error('[playlist]',e);
+    showToast('Error: '+e.message,7000);
   }
 }
-
 
 async function reloginForPlaylists(){
   sessionStorage.removeItem('sp_token');
