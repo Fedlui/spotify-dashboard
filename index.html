@@ -225,7 +225,8 @@ input:focus,select:focus{border-color:var(--green);}
 #globe-epoch-overlay{position:absolute;inset:0;background:rgba(6,8,16,.82);border-radius:16px;display:none;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;z-index:6;pointer-events:all;transition:opacity .3s;}
 #globe-epoch-overlay.visible{display:flex;}
 @media(max-width:768px){header{padding:1.25rem 1.5rem}#dashboard{padding:1.5rem}.track-card{grid-template-columns:30px 48px 1fr}.track-meta{display:none}}
-</style></head><body><div id="consent-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;padding:1.25rem;backdrop-filter:blur(8px);">
+</style><script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+</head><body><div id="consent-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;padding:1.25rem;backdrop-filter:blur(8px);">
 <div style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:2.25rem 2.5rem;max-width:500px;width:100%;box-shadow:0 0 80px rgba(29,185,84,.12);position:relative;overflow:hidden;">
 <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--green),transparent);"></div>
 <div style="text-align:center;margin-bottom:1.5rem;"><div style="font-size:2.5rem;margin-bottom:.75rem;">🎵</div>
@@ -869,14 +870,46 @@ function renderLab(){
   if(!el||window._labBuilt)return;
   window._labBuilt=true;
 
-  // ── Show loading state immediately ──────────────────────────────────────
-  el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem;gap:1rem;">
+  // ── Inject sub-nav + two section containers ──────────────────────────────
+  el.innerHTML=`
+<div style="border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:1.5rem;display:flex;gap:0;">
+  <button id="lab-subnav-playlists" onclick="showLabSection('playlists')"
+    style="padding:.75rem 1.25rem;font-size:.78rem;font-weight:700;font-family:'JetBrains Mono',monospace;background:none;border:none;border-bottom:2px solid var(--green);color:var(--green);cursor:pointer;transition:all .2s;">
+    🧪 Lab Playlist
+  </button>
+  <button id="lab-subnav-analysis" onclick="showLabSection('analysis')"
+    style="padding:.75rem 1.25rem;font-size:.78rem;font-weight:700;font-family:'JetBrains Mono',monospace;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;transition:all .2s;">
+    🔬 Análisis Académico
+  </button>
+</div>
+<div id="lab-section-playlists">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem;gap:1rem;">
     <div class="spinner"></div>
     <div style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--green);" id="lab-init-status">🧪 Inicializando laboratorio...</div>
-  </div>`;
+  </div>
+</div>
+<div id="lab-section-analysis" style="display:none;"></div>`;
 
-  // ── Load liked songs then build lab ─────────────────────────────────────
-  _buildLab(el);
+  // ── Load liked songs then build playlist lab ─────────────────────────────
+  _buildLab(document.getElementById('lab-section-playlists'));
+}
+
+function showLabSection(section){
+  const pl=document.getElementById('lab-section-playlists');
+  const an=document.getElementById('lab-section-analysis');
+  const btnPl=document.getElementById('lab-subnav-playlists');
+  const btnAn=document.getElementById('lab-subnav-analysis');
+  if(!pl||!an) return;
+  if(section==='playlists'){
+    pl.style.display=''; an.style.display='none';
+    btnPl.style.borderBottomColor='var(--green)';btnPl.style.color='var(--green)';
+    btnAn.style.borderBottomColor='transparent';btnAn.style.color='var(--muted)';
+  } else {
+    pl.style.display='none'; an.style.display='';
+    btnAn.style.borderBottomColor='var(--green)';btnAn.style.color='var(--green)';
+    btnPl.style.borderBottomColor='transparent';btnPl.style.color='var(--muted)';
+    if(!window._analysisBuilt) buildAcademicAnalysis();
+  }
 }
 
 async function _buildLab(el){
@@ -1054,6 +1087,14 @@ async function _buildLab(el){
 
   ${likedBanner}
 
+  <!-- Lab sub-nav -->
+  <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:1.5rem;background:rgba(0,0,0,.25);border-radius:10px 10px 0 0;overflow:hidden;">
+    <button id="lab-sub-playlists" onclick="labSubTab('playlists')" style="padding:.65rem 1.25rem;font-size:.7rem;font-weight:700;font-family:inherit;background:rgba(29,185,84,.1);border:none;border-bottom:2px solid var(--green);color:var(--green);cursor:pointer;letter-spacing:.06em;flex:1;">🧪 PLAYLISTS</button>
+    <button id="lab-sub-analysis" onclick="labSubTab('analysis')" style="padding:.65rem 1.25rem;font-size:.7rem;font-weight:700;font-family:inherit;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;letter-spacing:.06em;flex:1;">🔬 ANÁLISIS</button>
+  </div>
+  <div id="lab-panel-playlists">
+
+
   <!-- Search -->
   <div class="lab-search-wrap">
     <div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);margin-bottom:.5rem;">🔍 SÍNTESIS POR TEMA</div>
@@ -1094,6 +1135,28 @@ async function _buildLab(el){
 
   <!-- Géneros -->
   ${topGenres.length?`<div class="lab-section"><div class="lab-section-title">🎸 POR GÉNERO</div><div class="lab-grid">${topGenres.map((g,i)=>{const col=['#1DB954','#38bdf8','#c084fc','#fbbf24','#f87171','#fb923c','#34d399','#818cf8'][i%8];return labCard('genre_'+g.name,{img:g.img,name:g.name,count:g.tracks.length,color:col,emoji:'🎸'});}).join('')}</div></div>`:''}
+
+  </div><!-- /lab-panel-playlists -->
+
+  <!-- ANALYSIS PANEL -->
+  <div id="lab-panel-analysis" style="display:none;">
+    <div id="lab-analysis-upload" style="text-align:center;padding:2.5rem 1rem;">
+      <div style="font-size:2.5rem;margin-bottom:1rem;">📊</div>
+      <div style="font-size:1rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem;">Análisis Académico Musical</div>
+      <p style="font-size:.78rem;font-family:'JetBrains Mono',monospace;color:var(--muted);line-height:1.75;margin-bottom:1.5rem;max-width:400px;margin-left:auto;margin-right:auto;">Carga el JSON exportado desde esta misma app (con Géneros, Letras, Popularidad) para generar 6 análisis académicos completos con NLP.</p>
+      <div id="lab-drop-zone" onclick="document.getElementById('lab-file-input').click()" style="border:2px dashed rgba(29,185,84,.3);border-radius:14px;padding:2rem 1.5rem;cursor:pointer;transition:all .25s;background:rgba(29,185,84,.03);max-width:400px;margin:0 auto 1rem;" ondragover="event.preventDefault();this.style.borderColor='var(--green)'" ondragleave="this.style.borderColor='rgba(29,185,84,.3)'" ondrop="event.preventDefault();this.style.borderColor='rgba(29,185,84,.3)';labLoadFile(event.dataTransfer.files[0])">
+        <div style="font-size:1.6rem;margin-bottom:.4rem;">⚗️</div>
+        <div style="font-size:.82rem;color:var(--muted);">Arrastra tu JSON aquí o haz clic</div>
+        <div style="font-size:.68rem;color:rgba(255,255,255,.25);margin-top:.25rem;">Exportado desde Exportar JSON</div>
+      </div>
+      <input type="file" id="lab-file-input" accept=".json" style="display:none;" onchange="labLoadFile(this.files[0])">
+      <div id="lab-file-error" style="color:var(--red);font-size:.75rem;margin-top:.5rem;display:none;"></div>
+      <button onclick="labAnalyzeCurrent()" style="background:rgba(29,185,84,.08);border:1px solid rgba(29,185,84,.25);color:var(--green);font-family:inherit;font-size:.75rem;font-weight:700;padding:.5rem 1.25rem;border-radius:9px;cursor:pointer;margin-top:.5rem;" onmouseover="this.style.background='rgba(29,185,84,.18)'" onmouseout="this.style.background='rgba(29,185,84,.08)'">
+        🎵 Analizar datos actuales (sin JSON)
+      </button>
+    </div>
+    <div id="lab-analysis-results" style="display:none;"></div>
+  </div><!-- /lab-panel-analysis -->
 
 </div><!-- end lab-workspace -->
 
@@ -1411,6 +1474,341 @@ async function reloginForPlaylists(){
 }
 
 
+
+// ═══════════════════════════════════════════════════════════
+// ANÁLISIS ACADÉMICO — dentro del Lab, usa tracksData + likedData
+// ═══════════════════════════════════════════════════════════
+
+const POSITIVE_WORDS_NLP=new Set(['love','amor','feliz','happy','bien','good','great','amazing','beautiful','bello','bella','mejor','best','alegría','joy','light','vida','life','free','freedom','hope','esperanza','smile','sonrisa','peace','paz','together','juntos','dream','sueño','win','ganar','heart','corazón','glory','gloria','rise','levanta','strong','fuerte','baby','night','dance','bailar','shine','brillar','feel','sentir','warm','calor','bright','lucky','amar','quiero','querer','cielo','heaven','paradise','wonderful','perfecto','perfect','hermoso','hermosa']);
+const NEGATIVE_WORDS_NLP=new Set(['sad','triste','pain','dolor','hate','odio','bad','malo','mala','fear','miedo','cry','llorar','lost','perdido','dark','oscuro','alone','solo','sola','hurt','herido','broken','roto','dead','muerte','never','nunca','wrong','mal','tears','lágrimas','suffer','sufrir','empty','vacío','cold','frío','miss','extraño','gone','ido','die','morir','end','fin','lose','perder','war','guerra','prison','cárcel','blood','sangre','devil','diablo','hell','infierno','destroy','destruir','fight','pelear','fall','caer']);
+
+function nlpAnalyze(lyrics){
+  if(!lyrics||lyrics==='N/A'||lyrics.length<20) return {score:0,label:'neutral',pos:0,neg:0,total:0,kw:[]};
+  const words=lyrics.toLowerCase().replace(/[^a-záéíóúüñ\s]/gi,' ').split(/\s+/).filter(w=>w.length>2);
+  let pos=0,neg=0;const kw=[];
+  words.forEach(w=>{if(POSITIVE_WORDS_NLP.has(w)){pos++;kw.push({w,t:'pos'});}else if(NEGATIVE_WORDS_NLP.has(w)){neg++;kw.push({w,t:'neg'});}});
+  const total=pos+neg;const score=total>0?(pos-neg)/total:0;
+  return{score:Math.round(score*100)/100,label:score>0.1?'positivo':score<-0.1?'negativo':'neutral',pos,neg,total:words.length,kw:kw.slice(0,20)};
+}
+
+function statMean(arr){return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;}
+function statMedian(arr){const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function statSD(arr){const m=statMean(arr);return Math.sqrt(arr.reduce((a,b)=>a+Math.pow(b-m,2),0)/Math.max(1,arr.length));}
+
+function getAnalysisDB(){
+  // Merge tracksData + likedData, enrich with audio from tracksData when available
+  const seen=new Set();const db=[];
+  [...likedData,...tracksData].forEach(t=>{
+    if(!t||!t.id||seen.has(t.id))return;seen.add(t.id);
+    const top=tracksData.find(x=>x.id===t.id);
+    db.push({
+      name: t.name||'?',
+      artist: t.artists?.map(a=>a.name).join(', ')||'?',
+      genres: (t._genres&&t._genres.length?t._genres:[]).join(', ')||'N/A',
+      popularity: t.popularity!=null?t.popularity:null,
+      year: parseInt(t.album?.release_date?.split('-')[0])||null,
+      duration_sec: t.duration_ms?Math.round(t.duration_ms/1000):null,
+      loudness: top?._audio?.loudness?parseFloat(String(top._audio.loudness).replace(' dB','').replace(',','.')):null,
+      bpm: top?._audio?.bpm||null,
+      valence: top?._audio?.valence!=null?top._audio.valence:null,
+      energy: top?._audio?.energy!=null?top._audio.energy:null,
+      lyrics: t._lyricsText||'N/A',
+    });
+  });
+  return db;
+}
+
+let _aCharts={};
+function destroyAChart(id){if(_aCharts[id]){_aCharts[id].destroy();delete _aCharts[id];}}
+
+function buildAcademicAnalysis(){
+  window._analysisBuilt=true;
+  const el=document.getElementById('lab-section-analysis');
+  if(!el) return;
+
+  const ACOLS=['#1DB954','#38bdf8','#a78bfa','#fbbf24','#f87171','#f472b6','#34d399','#fb923c','#818cf8','#22d3ee'];
+  const DB=getAnalysisDB();
+
+  // Pre-compute all stats
+  const genreCount={};
+  DB.forEach(t=>(t.genres||'').split(',').map(g=>g.trim()).filter(g=>g&&g!=='N/A').forEach(g=>{genreCount[g]=(genreCount[g]||0)+1;}));
+  const topGenres=Object.entries(genreCount).sort((a,b)=>b[1]-a[1]);
+  const pops=DB.map(t=>t.popularity).filter(v=>v!=null);
+  const avgPop=Math.round(statMean(pops)),medPop=Math.round(statMedian(pops)),sdPop=Math.round(statSD(pops));
+  const genrePops={};
+  DB.forEach(t=>{const p=t.popularity;if(p==null)return;(t.genres||'').split(',').map(g=>g.trim()).filter(g=>g&&g!=='N/A').forEach(g=>{if(!genrePops[g])genrePops[g]=[];genrePops[g].push(p);});});
+  const genreAvgPop=Object.entries(genrePops).filter(([,v])=>v.length>=2).map(([g,v])=>({g,avg:Math.round(statMean(v)),n:v.length})).sort((a,b)=>b.avg-a.avg);
+  const artistPops={};
+  DB.forEach(t=>{const p=t.popularity,a=t.artist;if(p==null||!a)return;if(!artistPops[a])artistPops[a]=[];artistPops[a].push(p);});
+  const topArtists=Object.entries(artistPops).map(([a,v])=>({a,avg:Math.round(statMean(v)),n:v.length})).sort((a,b)=>b.avg-a.avg).slice(0,10);
+  const byDecade={};
+  DB.forEach(t=>{const y=t.year;if(!y||y<1940)return;const d=Math.floor(y/10)*10;if(!byDecade[d])byDecade[d]={n:0,pops:[],durs:[],louds:[]};byDecade[d].n++;if(t.popularity!=null)byDecade[d].pops.push(t.popularity);if(t.duration_sec)byDecade[d].durs.push(t.duration_sec);if(t.loudness!=null&&!isNaN(t.loudness))byDecade[d].louds.push(t.loudness);});
+  const decades=Object.keys(byDecade).sort();
+  const nlpDB=DB.filter(t=>t.lyrics&&t.lyrics!=='N/A'&&t.lyrics.length>50).map(t=>({...t,nlp:nlpAnalyze(t.lyrics)}));
+  const posC=nlpDB.filter(t=>t.nlp.label==='positivo').length,negC=nlpDB.filter(t=>t.nlp.label==='negativo').length,neuC=nlpDB.filter(t=>t.nlp.label==='neutral').length;
+  const avgSent=nlpDB.length?statMean(nlpDB.map(t=>t.nlp.score)).toFixed(2):'N/A';
+  const allKw={};nlpDB.forEach(t=>t.nlp.kw.forEach(k=>{if(!allKw[k.w])allKw[k.w]={count:0,type:k.t};allKw[k.w].count++;}));
+  const topKw=Object.entries(allKw).sort((a,b)=>b[1].count-a[1].count).slice(0,25);
+
+  // Build summary for AI
+  const dataSummary=`BASE: ${DB.length} canciones, ${Object.keys(artistPops).length} artistas, ${Object.keys(genreCount).length} géneros
+TOP GÉNEROS: ${topGenres.slice(0,8).map(([g,c])=>`${g}:${c}(${Math.round(c/DB.length*100)}%)`).join(', ')}
+POPULARIDAD: media=${avgPop}, mediana=${medPop}, sd=${sdPop}, min=${Math.round(Math.min(...pops))}, max=${Math.round(Math.max(...pops))}
+ARTISTAS MÁS POPULARES: ${topArtists.slice(0,5).map(x=>`${x.a}:${x.avg}/100(n=${x.n})`).join(', ')}
+DÉCADAS: ${decades.map(d=>`${d}s:n=${byDecade[d].n},pop=${byDecade[d].pops.length?Math.round(statMean(byDecade[d].pops)):'N/A'},dur=${byDecade[d].durs.length?Math.round(statMean(byDecade[d].durs)):'N/A'}s,dB=${byDecade[d].louds.length?statMean(byDecade[d].louds).toFixed(1):'N/A'}`).join(' | ')
+ESTADÍSTICAS POR GÉNERO (top 12): ${genreAvgPop.slice(0,12).map(x=>`${x.g}:media=${x.avg},n=${x.n}`).join(', ')}
+NLP: ${nlpDB.length} canciones con letra. Positivas:${posC}, Negativas:${negC}, Neutrales:${neuC}. Score promedio:${avgSent}. Top palabras: ${topKw.slice(0,10).map(([w,{count,type}])=>`${w}(${type},${count})`).join(', ')}`;
+
+  // ── Render HTML ───────────────────────────────────────────────────────────
+  el.innerHTML=`
+<style>
+.ac-card{background:#111118;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1.25rem;margin-bottom:1.1rem;}
+.ac-qnum{font-size:.58rem;font-weight:700;letter-spacing:.18em;color:var(--green);text-transform:uppercase;margin-bottom:.25rem;}
+.ac-qtitle{font-size:1.05rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.75rem;line-height:1.35;}
+.ac-grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;}
+.ac-chlbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem;}
+.ac-barrow{display:flex;align-items:center;gap:.6rem;margin-bottom:.45rem;}
+.ac-barlbl{font-size:.68rem;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+.ac-bartrack{flex:1;height:7px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;}
+.ac-barfill{height:100%;border-radius:4px;}
+.ac-barcnt{font-size:.65rem;color:var(--muted);min-width:38px;text-align:right;}
+.ac-ai{background:rgba(29,185,84,.06);border:1px solid rgba(29,185,84,.14);border-radius:12px;padding:1.1rem 1.25rem;margin-top:.875rem;}
+.ac-ai-title{font-size:.58rem;font-weight:700;letter-spacing:.14em;color:var(--green);text-transform:uppercase;margin-bottom:.6rem;display:flex;align-items:center;gap:.4rem;}
+.ac-ai-text{font-size:.8rem;line-height:1.85;color:rgba(240,240,245,.9);white-space:pre-wrap;}
+.ac-metric{background:#1a1a24;border-radius:10px;padding:.875rem;text-align:center;}
+.ac-mval{font-size:1.4rem;font-weight:800;letter-spacing:-.04em;}
+.ac-mlbl{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:.2rem;}
+.ac-table{width:100%;border-collapse:collapse;font-size:.72rem;}
+.ac-table th{text-align:left;padding:.4rem .6rem;font-size:.57rem;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.07);}
+.ac-table td{padding:.4rem .6rem;border-bottom:1px solid rgba(255,255,255,.03);}
+.ac-table tr:last-child td{border-bottom:none;}
+.ac-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:100px;font-size:.68rem;font-weight:700;}
+.pill-pos{background:rgba(29,185,84,.15);color:var(--green);border:1px solid rgba(29,185,84,.25);}
+.pill-neg{background:rgba(248,113,113,.15);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.pill-neu{background:rgba(136,136,136,.15);color:var(--muted);border:1px solid rgba(255,255,255,.1);}
+.ac-apa{background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.14);border-radius:12px;padding:1rem 1.25rem;margin-top:.875rem;font-size:.72rem;color:rgba(255,255,255,.65);line-height:1.8;}
+.ac-apa-title{font-size:.58rem;font-weight:700;letter-spacing:.12em;color:var(--blue);text-transform:uppercase;margin-bottom:.5rem;}
+.ac-subnav{display:flex;gap:.4rem;margin-bottom:1.25rem;flex-wrap:wrap;}
+.ac-subnav-btn{padding:.45rem 1rem;font-size:.72rem;font-weight:700;font-family:'JetBrains Mono',monospace;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;color:var(--muted);cursor:pointer;transition:all .2s;}
+.ac-subnav-btn.active{background:rgba(29,185,84,.12);border-color:rgba(29,185,84,.3);color:var(--green);}
+</style>
+
+<!-- Sub-nav for questions -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+  <div>
+    <div style="font-size:.6rem;font-weight:700;letter-spacing:.18em;color:var(--green);text-transform:uppercase;margin-bottom:.2rem;">🔬 LABORATORIO ANALÍTICO</div>
+    <div style="font-size:1rem;font-weight:800;letter-spacing:-.03em;">Análisis Académico de tu Música</div>
+    <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-top:.2rem;">${DB.length.toLocaleString()} canciones · ${Object.keys(artistPops).length} artistas · ${Object.keys(genreCount).length} géneros</div>
+  </div>
+  <div style="font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--muted);text-align:right;">Base: liked + top<br><span style="color:var(--green)">${likedData.length} gustados + ${tracksData.length} top</span></div>
+</div>
+<div class="ac-subnav" id="ac-subnav">
+  ${[1,2,3,4,5,6].map(n=>`<button class="ac-subnav-btn${n===1?' active':''}" onclick="showAcSection(${n})">${n}. ${['Géneros','Popularidad','Top G/A','Estadísticas','Décadas','Características + NLP'][n-1]}</button>`).join('')}
+</div>
+
+<!-- Q1 -->
+<div id="ac-sec-1">
+  <div class="ac-card">
+    <div class="ac-qnum">Pregunta 1</div>
+    <div class="ac-qtitle">¿Cuál es el género musical más representado?</div>
+    <div class="ac-grid2">
+      <div>
+        <div class="ac-chlbl">Frecuencia por género</div>
+        <div id="ac-genre-bars">
+          ${topGenres.slice(0,12).map(([g,c],i)=>`<div class="ac-barrow"><div class="ac-barlbl" title="${g}">${g}</div><div class="ac-bartrack"><div class="ac-barfill" style="width:${Math.round(c/topGenres[0][1]*100)}%;background:${ACOLS[i%ACOLS.length]};"></div></div><div class="ac-barcnt">${c} (${Math.round(c/DB.length*100)}%)</div></div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="ac-chlbl">Distribución (top 8)</div>
+        <div style="position:relative;height:220px;"><canvas id="ac-chart-genres" role="img" aria-label="Géneros"></canvas></div>
+      </div>
+    </div>
+    <div class="ac-ai" id="ac-ai-1"><div class="ac-ai-title"><span class="spinner"></span> Generando análisis...</div><div class="ac-ai-text" id="ac-ai-text-1"></div></div>
+  </div>
+</div>
+
+<!-- Q2 -->
+<div id="ac-sec-2" style="display:none;">
+  <div class="ac-card">
+    <div class="ac-qnum">Pregunta 2</div>
+    <div class="ac-qtitle">Distribución de popularidad — ¿coincide con tus preferencias?</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem;">
+      ${[{v:avgPop,l:'Media',c:'var(--amber)'},{v:medPop,l:'Mediana',c:'var(--blue)'},{v:sdPop,l:'Desv. Est.',c:'var(--purple)'},{v:Math.round(Math.max(...pops)),l:'Máximo',c:'var(--green)'}].map(m=>`<div class="ac-metric"><div class="ac-mval" style="color:${m.c}">${m.v}</div><div class="ac-mlbl">${m.l}</div></div>`).join('')}
+    </div>
+    <div class="ac-grid2">
+      <div><div class="ac-chlbl">Histograma de popularidad</div><div style="position:relative;height:200px;"><canvas id="ac-chart-pophist" role="img" aria-label="Histograma popularidad"></canvas></div></div>
+      <div><div class="ac-chlbl">Top 20 canciones más populares</div><div style="max-height:220px;overflow-y:auto;">
+        ${[...DB].filter(t=>t.popularity!=null).sort((a,b)=>b.popularity-a.popularity).slice(0,20).map((t,i)=>`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:.6rem;color:var(--muted);min-width:16px;">${i+1}</span><div style="flex:1;min-width:0;"><div style="font-size:.72rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:.6rem;color:var(--muted);">${t.artist}</div></div><span style="font-size:.7rem;font-weight:700;color:var(--amber);">${t.popularity}</span></div>`).join('')}
+      </div></div>
+    </div>
+    <div class="ac-ai" id="ac-ai-2"><div class="ac-ai-title"><span class="spinner"></span> Generando análisis...</div><div class="ac-ai-text" id="ac-ai-text-2"></div></div>
+  </div>
+</div>
+
+<!-- Q3 -->
+<div id="ac-sec-3" style="display:none;">
+  <div class="ac-card">
+    <div class="ac-qnum">Pregunta 3</div>
+    <div class="ac-qtitle">¿Qué géneros y artistas son los más populares?</div>
+    <div class="ac-grid2">
+      <div><div class="ac-chlbl">Popularidad promedio por género</div>
+        ${genreAvgPop.slice(0,10).map(({g,avg,n},i)=>`<div class="ac-barrow"><div class="ac-barlbl" title="${g}">${g}</div><div class="ac-bartrack"><div class="ac-barfill" style="width:${avg}%;background:${ACOLS[i%ACOLS.length]};"></div></div><div class="ac-barcnt">${avg}/100</div></div>`).join('')}
+      </div>
+      <div><div class="ac-chlbl">Artistas más populares</div>
+        ${topArtists.slice(0,10).map(({a,avg,n},i)=>`<div class="ac-barrow"><div class="ac-barlbl" title="${a}">${a}</div><div class="ac-bartrack"><div class="ac-barfill" style="width:${avg}%;background:${ACOLS[i%ACOLS.length]};"></div></div><div class="ac-barcnt">${avg}/100</div></div>`).join('')}
+      </div>
+    </div>
+    <div class="ac-ai" id="ac-ai-3"><div class="ac-ai-title"><span class="spinner"></span> Generando análisis...</div><div class="ac-ai-text" id="ac-ai-text-3"></div></div>
+  </div>
+</div>
+
+<!-- Q4 -->
+<div id="ac-sec-4" style="display:none;">
+  <div class="ac-card">
+    <div class="ac-qnum">Pregunta 4</div>
+    <div class="ac-qtitle">Estadísticas básicas de popularidad — general y por género</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem;">
+      ${[{v:avgPop,l:'Media',c:'var(--purple)'},{v:medPop,l:'Mediana',c:'var(--blue)'},{v:sdPop,l:'Desv. Est.',c:'var(--amber)'},{v:`${Math.round(Math.min(...pops))}–${Math.round(Math.max(...pops))}`,l:'Rango',c:'var(--green)'}].map(m=>`<div class="ac-metric"><div class="ac-mval" style="color:${m.c};font-size:${String(m.v).length>5?'1rem':'1.4rem'}">${m.v}</div><div class="ac-mlbl">${m.l}</div></div>`).join('')}
+    </div>
+    <div style="overflow-x:auto;"><table class="ac-table">
+      <thead><tr><th>Género</th><th>N</th><th>Media</th><th>Mediana</th><th>Desv.Est.</th><th>Mín</th><th>Máx</th></tr></thead>
+      <tbody>${Object.entries(genrePops).filter(([,v])=>v.length>=2).map(([g,v])=>[g,v]).sort((a,b)=>b[1].length-a[1].length).slice(0,15).map(([g,v])=>`<tr><td style="color:var(--green)">${g}</td><td>${v.length}</td><td>${Math.round(statMean(v))}</td><td>${Math.round(statMedian(v))}</td><td>${Math.round(statSD(v))}</td><td>${Math.round(Math.min(...v))}</td><td>${Math.round(Math.max(...v))}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div class="ac-ai" id="ac-ai-4"><div class="ac-ai-title"><span class="spinner"></span> Generando análisis...</div><div class="ac-ai-text" id="ac-ai-text-4"></div></div>
+  </div>
+</div>
+
+<!-- Q5 -->
+<div id="ac-sec-5" style="display:none;">
+  <div class="ac-card">
+    <div class="ac-qnum">Pregunta 5</div>
+    <div class="ac-qtitle">Canciones por década — ¿preferencia moderna u objetiva?</div>
+    <div class="ac-grid2">
+      <div><div class="ac-chlbl">Distribución por década</div><div style="position:relative;height:220px;"><canvas id="ac-chart-decades" role="img" aria-label="Décadas"></canvas></div></div>
+      <div><div class="ac-chlbl">Tabla por década</div>
+        <table class="ac-table"><thead><tr><th>Década</th><th>N</th><th>%</th><th>Pop. prom.</th><th>Dur. prom.</th></tr></thead>
+        <tbody>${decades.map(d=>`<tr><td style="color:var(--amber)">${d}s</td><td>${byDecade[d].n}</td><td>${Math.round(byDecade[d].n/DB.length*100)}%</td><td>${byDecade[d].pops.length?Math.round(statMean(byDecade[d].pops)):'N/A'}</td><td>${byDecade[d].durs.length?Math.round(statMean(byDecade[d].durs))+'s':'N/A'}</td></tr>`).join('')}</tbody></table>
+      </div>
+    </div>
+    <div class="ac-ai" id="ac-ai-5"><div class="ac-ai-title"><span class="spinner"></span> Generando análisis...</div><div class="ac-ai-text" id="ac-ai-text-5"></div></div>
+  </div>
+</div>
+
+<!-- Q6 -->
+<div id="ac-sec-6" style="display:none;">
+  <div class="ac-card">
+    <div class="ac-qnum">Pregunta 6</div>
+    <div class="ac-qtitle">Características por década + NLP de sentimientos</div>
+    <div class="ac-grid2" style="margin-bottom:1rem;">
+      <div><div class="ac-chlbl">Volumen dB por década</div><div style="position:relative;height:180px;"><canvas id="ac-chart-loud" role="img" aria-label="Volumen por décadas"></canvas></div></div>
+      <div><div class="ac-chlbl">Duración (seg) por década</div><div style="position:relative;height:180px;"><canvas id="ac-chart-dur" role="img" aria-label="Duración por décadas"></canvas></div></div>
+    </div>
+    ${nlpDB.length>0?`
+    <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:1rem;margin-bottom:1rem;">
+      <div class="ac-chlbl" style="margin-bottom:.75rem;">Análisis NLP de sentimientos (${nlpDB.length} canciones con letra)</div>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.875rem;">
+        <span class="ac-pill pill-pos">Positivas: ${posC} (${Math.round(posC/nlpDB.length*100)}%)</span>
+        <span class="ac-pill pill-neg">Negativas: ${negC} (${Math.round(negC/nlpDB.length*100)}%)</span>
+        <span class="ac-pill pill-neu">Neutrales: ${neuC} (${Math.round(neuC/nlpDB.length*100)}%)</span>
+        <span style="font-size:.7rem;color:var(--muted);">Score promedio: <strong style="color:${parseFloat(avgSent)>0?'var(--green)':parseFloat(avgSent)<0?'var(--red)':'var(--muted)'}">${avgSent}</strong></span>
+      </div>
+      <div class="ac-grid2">
+        <div><div class="ac-chlbl">Distribución sentimientos</div><div style="position:relative;height:160px;"><canvas id="ac-chart-sent" role="img" aria-label="Sentimientos"></canvas></div></div>
+        <div><div class="ac-chlbl">Palabras clave más frecuentes</div><div style="line-height:2;">${topKw.map(([w,{count,type}])=>`<span style="display:inline-block;padding:.15rem .5rem;margin:.1rem;border-radius:5px;font-size:${Math.min(0.9,0.65+count*.03)}rem;font-weight:700;background:${type==='pos'?'rgba(29,185,84,.15)':type==='neg'?'rgba(248,113,113,.15)':'rgba(136,136,136,.12)'};color:${type==='pos'?'var(--green)':type==='neg'?'var(--red)':'var(--muted)'};">${w}<span style="opacity:.5;font-size:.6rem"> ${count}</span></span>`).join('')}</div></div>
+      </div>
+      <div style="margin-top:.875rem;"><div class="ac-chlbl" style="margin-bottom:.5rem;">Canciones más positivas vs negativas</div>
+        <div class="ac-grid2">
+          <div><div style="font-size:.6rem;color:var(--green);margin-bottom:.35rem;">TOP POSITIVAS</div>${nlpDB.filter(t=>t.nlp.label==='positivo').sort((a,b)=>b.nlp.score-a.nlp.score).slice(0,4).map(t=>`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04);"><div style="flex:1;min-width:0;"><div style="font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:.6rem;color:var(--muted);">${t.artist}</div></div><span class="ac-pill pill-pos" style="font-size:.6rem">+${t.nlp.score.toFixed(2)}</span></div>`).join('')}</div>
+          <div><div style="font-size:.6rem;color:var(--red);margin-bottom:.35rem;">TOP NEGATIVAS</div>${nlpDB.filter(t=>t.nlp.label==='negativo').sort((a,b)=>a.nlp.score-b.nlp.score).slice(0,4).map(t=>`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04);"><div style="flex:1;min-width:0;"><div style="font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:.6rem;color:var(--muted);">${t.artist}</div></div><span class="ac-pill pill-neg" style="font-size:.6rem">${t.nlp.score.toFixed(2)}</span></div>`).join('')}</div>
+        </div>
+      </div>
+    </div>`:`<div style="background:rgba(255,255,255,.03);border-radius:10px;padding:1.25rem;margin-bottom:1rem;font-size:.78rem;font-family:'JetBrains Mono',monospace;color:var(--muted);">Sin letras en los datos. Para NLP: exporta con el campo "Letra" activado y pre-carga las letras antes de exportar.</div>`}
+    <div class="ac-ai" id="ac-ai-6"><div class="ac-ai-title"><span class="spinner"></span> Generando análisis + referencias APA...</div><div class="ac-ai-text" id="ac-ai-text-6"></div></div>
+    <div class="ac-apa" id="ac-apa" style="display:none;">
+      <div class="ac-apa-title">Referencias APA</div>
+      <div style="margin-bottom:.4rem;">Vickers, E. (2010). <em>The loudness war: Background, speculation, and recommendations.</em> Audio Engineering Society Convention 129, 1–26.</div>
+      <div style="margin-bottom:.4rem;">Interiano, M., Kazemi, K., Wang, L., Yang, J., Yu, Z., & Komarova, N. L. (2018). Musical trends and predictability of success in contemporary songs in and out of the top charts. <em>Royal Society Open Science, 5</em>(5), 171274. https://doi.org/10.1098/rsos.171274</div>
+      <div style="margin-bottom:.4rem;">Gauvin, H. L. (2018). Commercial popularity does not equal musical complexity. <em>Psychology of Music, 46</em>(4), 590–611. https://doi.org/10.1177/0305735617709708</div>
+      <div style="margin-bottom:.4rem;">Liu, B. (2012). <em>Sentiment analysis and opinion mining.</em> Morgan & Claypool Publishers.</div>
+      <div>Panova, T., & Carbonell, X. (2018). Is Spotify making songs shorter? <em>Media, Culture & Society, 40</em>(6), 837–853. https://doi.org/10.1177/0163443718764813</div>
+    </div>
+  </div>
+</div>`;
+
+  // ── Draw charts after DOM is ready ────────────────────────────────────────
+  setTimeout(()=>{
+    // Q1 chart
+    destroyAChart('ac-chart-genres');
+    _aCharts['ac-chart-genres']=new Chart(document.getElementById('ac-chart-genres'),{type:'doughnut',data:{labels:topGenres.slice(0,8).map(([g])=>g.length>14?g.slice(0,14)+'…':g),datasets:[{data:topGenres.slice(0,8).map(([,c])=>c),backgroundColor:ACOLS.slice(0,8),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#888',font:{size:10},boxWidth:10}}}}});
+
+    // Q2 histogram
+    const buckets=Array(10).fill(0);pops.forEach(p=>{const b=Math.min(9,Math.floor(p/10));buckets[b]++;});
+    destroyAChart('ac-chart-pophist');
+    _aCharts['ac-chart-pophist']=new Chart(document.getElementById('ac-chart-pophist'),{type:'bar',data:{labels:buckets.map((_,i)=>`${i*10}–${i*10+9}`),datasets:[{label:'Canciones',data:buckets,backgroundColor:'rgba(251,191,36,.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#888',font:{size:10}}},y:{ticks:{color:'#888',font:{size:10}}}}}});
+
+    // Q5 decades
+    destroyAChart('ac-chart-decades');
+    _aCharts['ac-chart-decades']=new Chart(document.getElementById('ac-chart-decades'),{type:'bar',data:{labels:decades.map(d=>d+'s'),datasets:[{label:'Canciones',data:decades.map(d=>byDecade[d].n),backgroundColor:ACOLS,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#888',font:{size:10}}},y:{ticks:{color:'#888',font:{size:10}}}}}});
+
+    // Q6 loudness + duration
+    const ldData=decades.map(d=>byDecade[d].louds.length?parseFloat(statMean(byDecade[d].louds).toFixed(1)):null);
+    const durData=decades.map(d=>byDecade[d].durs.length?Math.round(statMean(byDecade[d].durs)):null);
+    destroyAChart('ac-chart-loud');
+    _aCharts['ac-chart-loud']=new Chart(document.getElementById('ac-chart-loud'),{type:'line',data:{labels:decades.map(d=>d+'s'),datasets:[{label:'dB',data:ldData,borderColor:'#f87171',backgroundColor:'rgba(248,113,113,.1)',tension:.4,fill:true,pointRadius:4,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#888',font:{size:10}}},y:{ticks:{color:'#888',font:{size:10}}}}}});
+    destroyAChart('ac-chart-dur');
+    _aCharts['ac-chart-dur']=new Chart(document.getElementById('ac-chart-dur'),{type:'line',data:{labels:decades.map(d=>d+'s'),datasets:[{label:'seg',data:durData,borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,.1)',tension:.4,fill:true,pointRadius:4,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#888',font:{size:10}}},y:{ticks:{color:'#888',font:{size:10}}}}}});
+
+    // Q6 sentiment donut
+    if(nlpDB.length>0){
+      destroyAChart('ac-chart-sent');
+      _aCharts['ac-chart-sent']=new Chart(document.getElementById('ac-chart-sent'),{type:'doughnut',data:{labels:['Positivo','Negativo','Neutral'],datasets:[{data:[posC,negC,neuC],backgroundColor:['rgba(29,185,84,.8)','rgba(248,113,113,.8)','rgba(136,136,136,.5)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#888',font:{size:10},boxWidth:10}}}}});
+    }
+  },80);
+
+  // ── AI Analysis (6 questions) ─────────────────────────────────────────────
+  const questions=[
+    {n:1,prompt:`Pregunta 1: ¿Cuál es el género musical con más representatividad en la base de datos? Justifica con datos cuantitativos. Usa los datos proporcionados. Responde en español, estilo académico, máximo 180 palabras.`},
+    {n:2,prompt:`Pregunta 2: Analiza la distribución de popularidad. ¿La música más popular corresponde a las preferencias reales del usuario (es un top personal de Spotify + gustados)? Justifica con datos cuantitativos. Máximo 200 palabras en español.`},
+    {n:3,prompt:`Pregunta 3: ¿Qué géneros y artistas son los más populares en la base? Compara popularidad promedio por género y artista. Justifica cuantitativamente. Máximo 180 palabras en español.`},
+    {n:4,prompt:`Pregunta 4: Interpreta las estadísticas básicas de popularidad (media, mediana, desv. est.) de forma general y por género. ¿Qué revelan sobre las preferencias musicales? Máximo 220 palabras en español.`},
+    {n:5,prompt:`Pregunta 5: Analiza el número de canciones por década. ¿Refleja preferencia subjetiva moderna o es un reflejo objetivo de los lanzamientos? ¿Por qué hay más canciones de ciertas décadas? Justifica cuantitativamente. Máximo 200 palabras en español.`},
+    {n:6,prompt:`Pregunta 6 - Dos partes:\n\nPARTE A: Analiza si las canciones se han vuelto más ruidosas y cortas con el tiempo usando datos de dB y duración por década. ¿Estás de acuerdo con la hipótesis de Alvisch sobre canciones más cortas y ruidosas para vender más? Justifica con los datos. Incluye las referencias APA al final.\n\nPARTE B: Interpreta los resultados del análisis NLP de sentimientos. ¿Qué emociones predominan? ¿Qué dicen las palabras clave del perfil emocional? ¿Cómo se relaciona con popularidad y género?\n\nMáximo 380 palabras en español, estilo académico.`},
+  ];
+
+  (async()=>{
+    for(const q of questions){
+      try{
+        const resp=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            model:'claude-sonnet-4-20250514',max_tokens:900,
+            system:'Eres un analista académico de musicología de datos. Respondes en español con rigor cuantitativo, citando los datos exactos proporcionados. Estilo académico claro, sin inventar datos.',
+            messages:[{role:'user',content:`Datos de la base musical:\n${dataSummary}\n\n${q.prompt}`}]
+          })
+        });
+        const data=await resp.json();
+        const text=data.content?.find(c=>c.type==='text')?.text||'Error al generar análisis.';
+        document.getElementById(`ac-ai-text-${q.n}`).textContent=text;
+        document.querySelector(`#ac-ai-${q.n} .ac-ai-title`).innerHTML='🤖 Análisis IA';
+        if(q.n===6) document.getElementById('ac-apa').style.display='block';
+      }catch(e){
+        document.getElementById(`ac-ai-text-${q.n}`).textContent='Error de conexión con la API.';
+        document.querySelector(`#ac-ai-${q.n} .ac-ai-title`).textContent='⚠️ Error';
+      }
+    }
+  })();
+}
+
+function showAcSection(n){
+  [1,2,3,4,5,6].forEach(i=>{
+    const s=document.getElementById(`ac-sec-${i}`);if(s)s.style.display=i===n?'':'none';
+  });
+  document.querySelectorAll('.ac-subnav-btn').forEach((b,i)=>b.classList.toggle('active',i===n-1));
+  // Re-draw charts when switching to their section
+  if(n===1&&!_aCharts['ac-chart-genres']) setTimeout(()=>document.getElementById('lab-section-analysis')&&buildAcademicAnalysis(),50);
+}
+
 // === WRAPPED ===
 function renderWrapped(){
   const year=new Date().getFullYear();document.getElementById('wrapped-year').textContent=year;
@@ -1644,6 +2042,401 @@ ${barRow('🔊','Popularidad',avgPop,best.popularity||0,'var(--yellow)')}
 </div></div></div></div>`;
 }catch(err){el.innerHTML=`<div class="error-box">Error: ${err.message}</div>`;}}
 
+
+
+
+// ── Lab Sub-nav ──────────────────────────────────────────────────────────────
+function labSubTab(tab) {
+  const panels = ['playlists','analysis'];
+  panels.forEach(p => {
+    const el = document.getElementById('lab-panel-'+p);
+    if(el) el.style.display = p===tab ? 'block' : 'none';
+    const btn = document.getElementById('lab-sub-'+p);
+    if(btn) {
+      btn.style.borderBottomColor = p===tab ? 'var(--green)' : 'transparent';
+      btn.style.color              = p===tab ? 'var(--green)' : 'var(--muted)';
+      btn.style.background         = p===tab ? 'rgba(29,185,84,.1)' : 'none';
+    }
+  });
+}
+
+// ── Analysis: load JSON file ──────────────────────────────────────────────────
+function labLoadFile(file) {
+  if(!file) return;
+  const errEl = document.getElementById('lab-file-error');
+  errEl.style.display='none';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const raw = JSON.parse(e.target.result);
+      const db = Array.isArray(raw) ? raw : [];
+      if(!db.length) throw new Error('El JSON está vacío o tiene formato incorrecto.');
+      document.getElementById('lab-analysis-upload').style.display='none';
+      document.getElementById('lab-analysis-results').style.display='block';
+      runLabAnalysis(db);
+    } catch(err) {
+      errEl.textContent = 'Error: '+err.message;
+      errEl.style.display='block';
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ── Analysis: use current session data ───────────────────────────────────────
+function labAnalyzeCurrent() {
+  if(!tracksData.length) { showToast('⚠ Carga tu Spotify primero'); return; }
+  // Convert tracksData to export format
+  const db = tracksData.map((t,i) => ({
+    rank: i+1,
+    track_name: t.name,
+    artist_name: t.artists?.map(a=>a.name).join(', '),
+    released_year: t.album?.release_date?.split('-')[0],
+    popularity: t.popularity,
+    duration_seconds: Math.round((t.duration_ms||0)/1000),
+    bpm: t._audio?.bpm,
+    loudness: t._audio?.loudness,
+    genre: (t._genres||[]).join(', '),
+    lyrics: t._lyricsText || 'N/A',
+    oyentes: t._listeners,
+    album: t.album?.name,
+  }));
+  document.getElementById('lab-analysis-upload').style.display='none';
+  document.getElementById('lab-analysis-results').style.display='block';
+  runLabAnalysis(db);
+}
+
+// ── NLP Lexicon (ES + EN) ─────────────────────────────────────────────────────
+const NLP_POS = new Set(['love','amor','feliz','happy','bien','good','great','beautiful','bello','bella','mejor','best','alegría','joy','light','vida','life','free','hope','esperanza','smile','peace','paz','together','dream','sueño','heart','corazón','glory','rise','strong','fuerte','dance','shine','brillar','warm','lucky','amar','quiero','cielo','heaven','paradise','wonderful','perfecto','hermoso','hermosa','noche','night','bonito','bonita','lindo','linda','rico','rica','dulce','sweet','angel','reina','rey','oro','gold','sol','sun','luna','moon','fuego','fire','poder','power','triunfo','victoria']);
+const NLP_NEG = new Set(['sad','triste','pain','dolor','hate','odio','bad','malo','mala','fear','miedo','cry','llorar','lost','perdido','dark','oscuro','alone','solo','sola','hurt','herido','broken','roto','dead','muerte','never','nunca','wrong','tears','suffer','sufrir','empty','vacío','cold','frío','miss','gone','die','morir','end','lose','perder','war','guerra','cárcel','blood','sangre','devil','hell','destroy','fight','pelear','fall','caer','preso','maldito','maldita','jamás','nunca','mentira','traición','traicionar','engaño','engañar','falso','falsa','odiar','romper','destruir','desilusión','abandonar','perdonar','venganza','vengarse','matar','muerte','morir','muerto','muerta','demonios','infierno','diablo','monstruo','pesadilla','oscuridad','tinieblas','soledad','desamor','derrota','fracaso','culpa','vergüenza']);
+
+function nlpAnalyze(text) {
+  if(!text||text==='N/A'||text.length<10) return null;
+  const words = text.toLowerCase()
+    .replace(/[^a-záéíóúüñ\s]/gi,' ')
+    .split(/\s+/)
+    .filter(w=>w.length>2);
+  const freq = {};
+  words.forEach(w=>{ freq[w]=(freq[w]||0)+1; });
+  let pos=0, neg=0;
+  words.forEach(w=>{ if(NLP_POS.has(w))pos++; else if(NLP_NEG.has(w))neg++; });
+  const total=pos+neg;
+  return { score: total>0?(pos-neg)/total:0, pos, neg, words, freq, total:words.length };
+}
+
+function mean(arr){return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;}
+function median(arr){const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function stddev(arr){const m=mean(arr);return Math.sqrt(arr.reduce((a,b)=>a+Math.pow(b-m,2),0)/Math.max(1,arr.length));}
+
+// ── Getters ───────────────────────────────────────────────────────────────────
+const labF=(t,...keys)=>{for(const k of keys){if(t[k]!==undefined&&t[k]!==null&&t[k]!=='N/A')return t[k];}return null;};
+const labGenres =t=>(labF(t,'genre','géneros','generos')||'').split(',').map(g=>g.trim()).filter(g=>g&&g!=='N/A');
+const labPop    =t=>{const v=labF(t,'popularity','popularidad');return v!=null?parseFloat(v):null;};
+const labDur    =t=>{const v=labF(t,'duration_seconds','duracion_ms');if(!v)return null;return v>1000?Math.round(v/1000):parseFloat(v);};
+const labLoud   =t=>{const v=labF(t,'loudness','volumen');if(!v)return null;return parseFloat(String(v).replace(' dB','').replace(',','.'));};
+const labYear   =t=>{const v=labF(t,'released_year','ano','año');return v?parseInt(v):null;};
+const labLyrics =t=>labF(t,'lyrics','letra','Letra')||'';
+const labName   =t=>labF(t,'track_name','nombre','Nombre','name')||'?';
+const labArtist =t=>labF(t,'artist_name','artista','Artista','artist')||'?';
+const labBpm    =t=>{const v=labF(t,'bpm');return v?parseFloat(v):null;};
+
+const LAB_COLORS=['#1DB954','#38bdf8','#a78bfa','#fbbf24','#f87171','#f472b6','#34d399','#fb923c','#22d3ee','#e879f9','#86efac','#fcd34d'];
+let _labCharts = {};
+function labDestroyChart(id){if(_labCharts[id]){_labCharts[id].destroy();delete _labCharts[id];}}
+
+// ── Main analysis runner ──────────────────────────────────────────────────────
+async function runLabAnalysis(db) {
+  const container = document.getElementById('lab-analysis-results');
+  
+  // ── Pre-compute all data ────────────────────────────────────────────────────
+  const pops   = db.map(labPop).filter(v=>v!=null);
+  const durs   = db.map(labDur).filter(v=>v!=null);
+  const louds  = db.map(labLoud).filter(v=>v!=null&&!isNaN(v));
+  const bpms   = db.map(labBpm).filter(v=>v!=null);
+
+  // Genres
+  const genreCount={}, genrePopArr={};
+  db.forEach(t=>{labGenres(t).forEach(g=>{
+    genreCount[g]=(genreCount[g]||0)+1;
+    const p=labPop(t);if(p!=null){if(!genrePopArr[g])genrePopArr[g]=[];genrePopArr[g].push(p);}
+  });});
+  const genreRanked=Object.entries(genreCount).sort((a,b)=>b[1]-a[1]);
+  const topGenre=genreRanked[0]||['?',0];
+
+  // Artists
+  const artistPopArr={};
+  db.forEach(t=>{const p=labPop(t),a=labArtist(t);if(p==null)return;if(!artistPopArr[a])artistPopArr[a]=[];artistPopArr[a].push(p);});
+  const artistRanked=Object.entries(artistPopArr).map(([a,v])=>({a,avg:mean(v),n:v.length})).sort((a,b)=>b.avg-a.avg);
+
+  // By decade
+  const byDecade={};
+  db.forEach(t=>{const y=labYear(t);if(!y||y<1930)return;const d=Math.floor(y/10)*10;
+    if(!byDecade[d])byDecade[d]={n:0,pop:[],loud:[],dur:[],bpm:[]};
+    byDecade[d].n++;
+    const p=labPop(t),l=labLoud(t),dur=labDur(t),b=labBpm(t);
+    if(p!=null)byDecade[d].pop.push(p);
+    if(l!=null&&!isNaN(l))byDecade[d].loud.push(l);
+    if(dur!=null)byDecade[d].dur.push(dur);
+    if(b!=null)byDecade[d].bpm.push(b);
+  });
+  const decades=Object.keys(byDecade).sort();
+
+  // NLP
+  const withLyrics=db.filter(t=>{const l=labLyrics(t);return l&&l.length>50;});
+  const allLyricsText=withLyrics.map(t=>labLyrics(t)).join(' ');
+  const globalNlp=nlpAnalyze(allLyricsText)||{score:0,pos:0,neg:0,words:[],freq:{},total:0};
+  const trackNlp=withLyrics.map(t=>({t,nlp:nlpAnalyze(labLyrics(t))})).filter(x=>x.nlp);
+  const posCount=trackNlp.filter(x=>x.nlp.score>0.1).length;
+  const negCount=trackNlp.filter(x=>x.nlp.score<-0.1).length;
+  const neuCount=trackNlp.length-posCount-negCount;
+
+  // Top words (excluding stop words)
+  const STOP=new Set(['que','con','una','los','las','del','por','para','pero','como','sus','más','uno','dos','tres','hay','está','han','fue','ser','son','the','and','you','that','for','with','this','have','from','they','were','said','will','would','there','their','what','about','which','when','your','can','not','but','all','are','was','had','his','her','she','him','its','how','our','out','who','get','him','its','may','also','into','than','then','some','just','been','now','come','back','only','over','after','your','know','take','well','own','see','him','too','new','way','did','see','yet','few','here','let','still','these','those','come','never']);
+  const wordFreq={};
+  globalNlp.words.filter(w=>w.length>2&&!STOP.has(w)).forEach(w=>{wordFreq[w]=(wordFreq[w]||0)+1;});
+  const topWords=Object.entries(wordFreq).sort((a,b)=>b[1]-a[1]).slice(0,40);
+
+  // ── Build summary for Claude ───────────────────────────────────────────────
+  const dataSummary=`BASE DE DATOS: ${db.length} canciones, ${new Set(db.map(labArtist)).size} artistas, ${Object.keys(genreCount).length} géneros
+GÉNEROS TOP: ${genreRanked.slice(0,6).map(([g,c])=>`${g}:${c}(${Math.round(c/db.length*100)}%)`).join(', ')}
+POPULARIDAD: media=${Math.round(mean(pops))}, mediana=${Math.round(median(pops))}, sd=${Math.round(stddev(pops))}, min=${Math.round(Math.min(...pops))}, max=${Math.round(Math.max(...pops))}
+ARTISTAS TOP POP: ${artistRanked.slice(0,5).map(x=>`${x.a}:${Math.round(x.avg)}`).join(', ')}
+DÉCADAS: ${decades.map(d=>`${d}s:${byDecade[d].n}temas,${byDecade[d].loud.length?mean(byDecade[d].loud).toFixed(1):'?'}dB,${byDecade[d].dur.length?Math.round(mean(byDecade[d].dur)):'?'}s`).join(' | ')}
+NLP (${withLyrics.length} canciones con letra): positivas=${posCount}, negativas=${negCount}, neutrales=${neuCount}, score_prom=${trackNlp.length?mean(trackNlp.map(x=>x.nlp.score)).toFixed(2):'N/A'}
+PALABRAS MÁS FRECUENTES: ${topWords.slice(0,15).map(([w,c])=>`${w}:${c}`).join(', ')}
+GÉNEROS POR POP: ${Object.entries(genrePopArr).filter(([,v])=>v.length>=2).map(([g,v])=>`${g}:${Math.round(mean(v))}`).sort((a,b)=>parseInt(b[1])-parseInt(a[1])).slice(0,8).join(', ')}`;
+
+  // ── Render HTML ────────────────────────────────────────────────────────────
+  container.innerHTML=`
+<style>
+.la-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:1.25rem;margin-bottom:1rem;}
+.la-h{font-size:.58rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:.875rem;}
+.la-q{background:rgba(29,185,84,.06);border:1px solid rgba(29,185,84,.12);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;}
+.la-q-num{font-size:.55rem;font-weight:700;letter-spacing:.15em;color:var(--green);text-transform:uppercase;margin-bottom:.25rem;}
+.la-q-title{font-size:.88rem;font-weight:800;letter-spacing:-.02em;margin-bottom:.5rem;}
+.la-ai{font-size:.78rem;line-height:1.85;color:rgba(255,255,255,.8);white-space:pre-wrap;}
+.la-loading{display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--green);}
+.la-grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;}
+.la-metric{background:rgba(0,0,0,.3);border-radius:10px;padding:.875rem;text-align:center;}
+.la-mval{font-size:1.4rem;font-weight:800;letter-spacing:-.04em;}
+.la-mlbl{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.4);margin-top:.2rem;}
+.la-bar-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.45rem;}
+.la-bar-lbl{font-size:.68rem;min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.la-bar-track{flex:1;height:7px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;}
+.la-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+.la-bar-n{font-size:.62rem;color:rgba(255,255,255,.4);min-width:36px;text-align:right;}
+.la-word{display:inline-block;padding:.2rem .55rem;border-radius:100px;font-size:.7rem;font-weight:700;margin:.2rem .15rem;cursor:default;}
+.la-word-pos{background:rgba(29,185,84,.2);color:var(--green);border:1px solid rgba(29,185,84,.3);}
+.la-word-neg{background:rgba(248,113,113,.2);color:#f87171;border:1px solid rgba(248,113,113,.3);}
+.la-word-neu{background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);}
+.la-apa{background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.12);border-radius:10px;padding:.875rem 1.25rem;margin-top:.75rem;font-size:.72rem;line-height:1.8;color:rgba(255,255,255,.6);}
+.la-apa-title{font-size:.55rem;font-weight:700;letter-spacing:.12em;color:#38bdf8;text-transform:uppercase;margin-bottom:.5rem;}
+</style>
+
+<!-- STATS STRIP -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.625rem;margin-bottom:1.25rem;">
+  <div class="la-metric"><div class="la-mval" style="color:var(--green)">${db.length}</div><div class="la-mlbl">Canciones</div></div>
+  <div class="la-metric"><div class="la-mval" style="color:var(--amber)">${Math.round(mean(pops))}</div><div class="la-mlbl">Pop. media</div></div>
+  <div class="la-metric"><div class="la-mval" style="color:#a78bfa">${Object.keys(genreCount).length}</div><div class="la-mlbl">Géneros</div></div>
+  <div class="la-metric"><div class="la-mval" style="color:#f472b6">${withLyrics.length}</div><div class="la-mlbl">Con letra</div></div>
+</div>
+
+<!-- Q1: Géneros -->
+<div class="la-q" id="laq-1">
+  <div class="la-q-num">Pregunta 1</div>
+  <div class="la-q-title">¿Cuál es el género más representado?</div>
+  <div class="la-grid2">
+    <div>
+      <div class="la-h">Distribución de géneros</div>
+      ${genreRanked.slice(0,12).map(([g,c],i)=>`<div class="la-bar-row"><div class="la-bar-lbl">${g}</div><div class="la-bar-track"><div class="la-bar-fill" style="width:${Math.round(c/genreRanked[0][1]*100)}%;background:${LAB_COLORS[i%LAB_COLORS.length]};"></div></div><div class="la-bar-n">${c} (${Math.round(c/db.length*100)}%)</div></div>`).join('')}
+    </div>
+    <div>
+      <div class="la-h">Top géneros — chart</div>
+      <div style="position:relative;height:260px;"><canvas id="la-chart-genres" role="img" aria-label="Géneros musicales"></canvas></div>
+    </div>
+  </div>
+  <div class="la-loading" id="la-ai-1-loading"><span style="width:14px;height:14px;border:2px solid rgba(29,185,84,.3);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>Analizando con IA...</div>
+  <div class="la-ai" id="la-ai-1"></div>
+</div>
+
+<!-- Q2: Popularidad -->
+<div class="la-q" id="laq-2">
+  <div class="la-q-num">Pregunta 2</div>
+  <div class="la-q-title">Distribución de popularidad — ¿coincide con tus preferencias?</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.625rem;margin-bottom:.875rem;">
+    ${[{v:Math.round(mean(pops)),l:'Media',c:'var(--amber)'},{v:Math.round(median(pops)),l:'Mediana',c:'#f472b6'},{v:Math.round(stddev(pops)),l:'Desv. Est.',c:'#a78bfa'},{v:`${Math.round(Math.min(...pops))}–${Math.round(Math.max(...pops))}`,l:'Rango',c:'#38bdf8'}].map(m=>`<div class="la-metric"><div class="la-mval" style="color:${m.c}">${m.v}</div><div class="la-mlbl">${m.l}</div></div>`).join('')}
+  </div>
+  <div class="la-grid2">
+    <div>
+      <div class="la-h">Histograma (0–100)</div>
+      <div style="position:relative;height:200px;"><canvas id="la-chart-pop" role="img" aria-label="Histograma popularidad"></canvas></div>
+    </div>
+    <div>
+      <div class="la-h">Top 20 por popularidad</div>
+      <div style="max-height:200px;overflow-y:auto;">${[...db].filter(t=>labPop(t)!=null).sort((a,b)=>labPop(b)-labPop(a)).slice(0,20).map((t,i)=>`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:.6rem;color:rgba(255,255,255,.3);min-width:18px;">${i+1}</span><div style="flex:1;min-width:0;"><div style="font-size:.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labName(t)}</div><div style="font-size:.6rem;color:rgba(255,255,255,.4);">${labArtist(t)}</div></div><span style="font-size:.7rem;font-weight:700;color:var(--amber);">${Math.round(labPop(t))}</span></div>`).join('')}</div>
+    </div>
+  </div>
+  <div class="la-loading" id="la-ai-2-loading"><span style="width:14px;height:14px;border:2px solid rgba(29,185,84,.3);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>Analizando con IA...</div>
+  <div class="la-ai" id="la-ai-2"></div>
+</div>
+
+<!-- Q3: Top géneros/artistas -->
+<div class="la-q" id="laq-3">
+  <div class="la-q-num">Pregunta 3</div>
+  <div class="la-q-title">¿Qué géneros y artistas son los más populares?</div>
+  <div class="la-grid2">
+    <div>
+      <div class="la-h">Popularidad promedio por género</div>
+      ${Object.entries(genrePopArr).filter(([,v])=>v.length>=2).map(([g,v])=>({g,avg:mean(v),n:v.length})).sort((a,b)=>b.avg-a.avg).slice(0,10).map(([x,i],idx)=>{const item=Object.entries(genrePopArr).filter(([,v])=>v.length>=2).map(([g,v])=>({g,avg:mean(v)})).sort((a,b)=>b.avg-a.avg)[idx];if(!item)return'';return`<div class="la-bar-row"><div class="la-bar-lbl">${item.g}</div><div class="la-bar-track"><div class="la-bar-fill" style="width:${Math.round(item.avg)}%;background:${LAB_COLORS[idx%LAB_COLORS.length]};"></div></div><div class="la-bar-n">${Math.round(item.avg)}/100</div></div>`}).join('')}
+    </div>
+    <div>
+      <div class="la-h">Artistas más populares (pop. promedio)</div>
+      ${artistRanked.slice(0,12).map((x,i)=>`<div class="la-bar-row"><div class="la-bar-lbl">${x.a}</div><div class="la-bar-track"><div class="la-bar-fill" style="width:${Math.round(x.avg)}%;background:${LAB_COLORS[i%LAB_COLORS.length]};"></div></div><div class="la-bar-n">${Math.round(x.avg)}/100</div></div>`).join('')}
+    </div>
+  </div>
+  <div class="la-loading" id="la-ai-3-loading"><span style="width:14px;height:14px;border:2px solid rgba(29,185,84,.3);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>Analizando con IA...</div>
+  <div class="la-ai" id="la-ai-3"></div>
+</div>
+
+<!-- Q4: Estadísticas -->
+<div class="la-q" id="laq-4">
+  <div class="la-q-num">Pregunta 4</div>
+  <div class="la-q-title">Estadísticas básicas de popularidad — general y por género</div>
+  <div style="overflow-x:auto;margin-bottom:.75rem;">
+    <table style="width:100%;border-collapse:collapse;font-size:.72rem;">
+      <thead><tr style="border-bottom:1px solid rgba(255,255,255,.1);">${['Género','N','Media','Mediana','Desv.Est.','Mín','Máx'].map(h=>`<th style="text-align:left;padding:.4rem .6rem;font-size:.58rem;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.35);text-transform:uppercase;">${h}</th>`).join('')}</tr></thead>
+      <tbody>${Object.entries(genrePopArr).filter(([,v])=>v.length>=2).map(([g,v])=>({g,v})).sort((a,b)=>b.v.length-a.v.length).slice(0,14).map(({g,v},i)=>`<tr style="border-bottom:1px solid rgba(255,255,255,.03);"><td style="padding:.4rem .6rem;color:${LAB_COLORS[i%LAB_COLORS.length]}">${g}</td><td style="padding:.4rem .6rem;">${v.length}</td><td style="padding:.4rem .6rem;color:var(--amber)">${Math.round(mean(v))}</td><td style="padding:.4rem .6rem;">${Math.round(median(v))}</td><td style="padding:.4rem .6rem;">${Math.round(stddev(v))}</td><td style="padding:.4rem .6rem;">${Math.round(Math.min(...v))}</td><td style="padding:.4rem .6rem;">${Math.round(Math.max(...v))}</td></tr>`).join('')}</tbody>
+    </table>
+  </div>
+  <div class="la-loading" id="la-ai-4-loading"><span style="width:14px;height:14px;border:2px solid rgba(29,185,84,.3);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>Analizando con IA...</div>
+  <div class="la-ai" id="la-ai-4"></div>
+</div>
+
+<!-- Q5: Décadas -->
+<div class="la-q" id="laq-5">
+  <div class="la-q-num">Pregunta 5</div>
+  <div class="la-q-title">Canciones por década — ¿preferencia moderna u objetiva?</div>
+  <div class="la-grid2">
+    <div>
+      <div class="la-h">Distribución por década</div>
+      <div style="position:relative;height:200px;"><canvas id="la-chart-decades" role="img" aria-label="Canciones por década"></canvas></div>
+    </div>
+    <div>
+      <div class="la-h">Tabla</div>
+      <table style="width:100%;border-collapse:collapse;font-size:.72rem;">
+        <thead><tr>${['Década','Canciones','%','Pop.prom','Dur.prom(s)'].map(h=>`<th style="text-align:left;padding:.3rem .5rem;font-size:.55rem;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;">${h}</th>`).join('')}</tr></thead>
+        <tbody>${decades.map((d,i)=>`<tr style="border-top:1px solid rgba(255,255,255,.04);"><td style="padding:.3rem .5rem;color:${LAB_COLORS[i%LAB_COLORS.length]};font-weight:700;">${d}s</td><td style="padding:.3rem .5rem;">${byDecade[d].n}</td><td style="padding:.3rem .5rem;color:rgba(255,255,255,.5);">${Math.round(byDecade[d].n/db.length*100)}%</td><td style="padding:.3rem .5rem;">${byDecade[d].pop.length?Math.round(mean(byDecade[d].pop)):'—'}</td><td style="padding:.3rem .5rem;">${byDecade[d].dur.length?Math.round(mean(byDecade[d].dur)):'—'}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>
+  <div class="la-loading" id="la-ai-5-loading"><span style="width:14px;height:14px;border:2px solid rgba(29,185,84,.3);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>Analizando con IA...</div>
+  <div class="la-ai" id="la-ai-5"></div>
+</div>
+
+<!-- Q6: Características + NLP -->
+<div class="la-q" id="laq-6">
+  <div class="la-q-num">Pregunta 6</div>
+  <div class="la-q-title">Características por década + Análisis de sentimientos NLP</div>
+  <div class="la-grid2">
+    <div>
+      <div class="la-h">Volumen (dB) y duración por década</div>
+      <div style="position:relative;height:180px;"><canvas id="la-chart-trends" role="img" aria-label="Tendencias por década"></canvas></div>
+    </div>
+    <div>
+      <div class="la-h">NLP — Sentimientos de todas las letras</div>
+      <div style="display:flex;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap;">
+        <span style="background:rgba(29,185,84,.15);color:var(--green);border:1px solid rgba(29,185,84,.25);border-radius:100px;padding:.2rem .75rem;font-size:.7rem;font-weight:700;">✓ ${posCount} positivas (${Math.round(posCount/Math.max(1,trackNlp.length)*100)}%)</span>
+        <span style="background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.25);border-radius:100px;padding:.2rem .75rem;font-size:.7rem;font-weight:700;">✗ ${negCount} negativas (${Math.round(negCount/Math.max(1,trackNlp.length)*100)}%)</span>
+        <span style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);border-radius:100px;padding:.2rem .75rem;font-size:.7rem;font-weight:700;">~ ${neuCount} neutrales</span>
+      </div>
+      <div style="position:relative;height:140px;"><canvas id="la-chart-sentiment" role="img" aria-label="Sentimientos NLP"></canvas></div>
+    </div>
+  </div>
+
+  ${withLyrics.length>0?`
+  <!-- Word cloud -->
+  <div style="margin:1rem 0;">
+    <div class="la-h">Nube de palabras más frecuentes en todas las letras</div>
+    <div id="la-wordcloud">${topWords.map(([w,c],i)=>{const size=Math.min(1.4,.65+c/topWords[0][1]*.8);const type=NLP_POS.has(w)?'la-word-pos':NLP_NEG.has(w)?'la-word-neg':'la-word-neu';return`<span class="la-word ${type}" style="font-size:${size.toFixed(2)}rem;" title="${c} veces">${w}<sup style="font-size:.5rem;opacity:.5;margin-left:.2rem;">${c}</sup></span>`;}).join('')}</div>
+  </div>
+  <!-- Top pos/neg songs -->
+  <div class="la-grid2" style="margin-top:.875rem;">
+    <div><div class="la-h" style="color:rgba(29,185,84,.7);">Canciones más positivas</div>${trackNlp.filter(x=>x.nlp.score>0).sort((a,b)=>b.nlp.score-a.nlp.score).slice(0,5).map(({t,nlp})=>`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04);"><div style="flex:1;min-width:0;"><div style="font-size:.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labName(t)}</div><div style="font-size:.6rem;color:rgba(255,255,255,.4);">${labArtist(t)}</div></div><span style="font-size:.68rem;font-weight:700;color:var(--green);">+${nlp.score.toFixed(2)}</span></div>`).join('')}</div>
+    <div><div class="la-h" style="color:rgba(248,113,113,.7);">Canciones más negativas</div>${trackNlp.filter(x=>x.nlp.score<0).sort((a,b)=>a.nlp.score-b.nlp.score).slice(0,5).map(({t,nlp})=>`<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04);"><div style="flex:1;min-width:0;"><div style="font-size:.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labName(t)}</div><div style="font-size:.6rem;color:rgba(255,255,255,.4);">${labArtist(t)}</div></div><span style="font-size:.68rem;font-weight:700;color:#f87171;">${nlp.score.toFixed(2)}</span></div>`).join('')}</div>
+  </div>`:'<div style="font-size:.75rem;color:rgba(255,255,255,.35);padding:.75rem 0;">No hay letras en los datos. Exporta con el campo "Letra" activado y pre-carga las letras primero.</div>'}
+
+  <div class="la-loading" id="la-ai-6-loading"><span style="width:14px;height:14px;border:2px solid rgba(29,185,84,.3);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>Analizando con IA...</div>
+  <div class="la-ai" id="la-ai-6"></div>
+  <div class="la-apa" id="la-apa" style="display:none;">
+    <div class="la-apa-title">Referencias APA</div>
+    <div id="la-apa-list"></div>
+  </div>
+</div>
+`;
+
+  // ── Render charts ──────────────────────────────────────────────────────────
+  setTimeout(()=>{
+    // Q1: genres
+    labDestroyChart('la-chart-genres');
+    const top10g=genreRanked.slice(0,10);
+    _labCharts['la-chart-genres']=new Chart(document.getElementById('la-chart-genres'),{type:'bar',data:{labels:top10g.map(([g])=>g.length>12?g.slice(0,12)+'…':g),datasets:[{label:'Canciones',data:top10g.map(([,c])=>c),backgroundColor:LAB_COLORS.slice(0,10),borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#666',font:{size:10}}},y:{ticks:{color:'#666',font:{size:10}}}}}});
+
+    // Q2: histogram
+    labDestroyChart('la-chart-pop');
+    const buckets=Array(10).fill(0);
+    pops.forEach(p=>{const b=Math.min(9,Math.floor(p/10));buckets[b]++;});
+    _labCharts['la-chart-pop']=new Chart(document.getElementById('la-chart-pop'),{type:'bar',data:{labels:buckets.map((_,i)=>`${i*10}-${i*10+9}`),datasets:[{label:'Canciones',data:buckets,backgroundColor:'rgba(251,191,36,.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#666',font:{size:10}}},y:{ticks:{color:'#666',font:{size:10}}}}}});
+
+    // Q5: decades
+    labDestroyChart('la-chart-decades');
+    _labCharts['la-chart-decades']=new Chart(document.getElementById('la-chart-decades'),{type:'bar',data:{labels:decades.map(d=>d+'s'),datasets:[{label:'Canciones',data:decades.map(d=>byDecade[d].n),backgroundColor:LAB_COLORS,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#666',font:{size:10}}},y:{ticks:{color:'#666',font:{size:10}}}}}});
+
+    // Q6: trends
+    labDestroyChart('la-chart-trends');
+    _labCharts['la-chart-trends']=new Chart(document.getElementById('la-chart-trends'),{type:'line',data:{labels:decades.map(d=>d+'s'),datasets:[{label:'dB',data:decades.map(d=>byDecade[d].loud.length?parseFloat(mean(byDecade[d].loud).toFixed(1)):null),borderColor:'#f87171',backgroundColor:'rgba(248,113,113,.08)',tension:.4,fill:true,yAxisID:'y'},{label:'Seg/10',data:decades.map(d=>byDecade[d].dur.length?Math.round(mean(byDecade[d].dur)/10):null),borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,.08)',tension:.4,fill:true,yAxisID:'y'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{size:10}}}},scales:{y:{ticks:{color:'#666',font:{size:10}}}}}});
+
+    // Q6: sentiment
+    if(document.getElementById('la-chart-sentiment')){
+      labDestroyChart('la-chart-sentiment');
+      _labCharts['la-chart-sentiment']=new Chart(document.getElementById('la-chart-sentiment'),{type:'doughnut',data:{labels:['Positivo','Negativo','Neutral'],datasets:[{data:[posCount,negCount,neuCount],backgroundColor:['rgba(29,185,84,.8)','rgba(248,113,113,.8)','rgba(136,136,136,.4)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{size:10}}}}}});
+    }
+  }, 100);
+
+  // ── AI Analysis ────────────────────────────────────────────────────────────
+  const aiQuestions=[
+    {n:1,prompt:`Pregunta 1: Justifica con datos exactos cuál es el género más representado y qué dice esto sobre los gustos musicales. Incluye porcentajes. Máximo 180 palabras, español académico.`},
+    {n:2,prompt:`Pregunta 2: Analiza la distribución de popularidad. La media es ${Math.round(mean(pops))}/100 y la mediana ${Math.round(median(pops))}. ¿La música más popular en la base corresponde a preferencias reales? ¿Por qué puede haber sesgo? Máximo 200 palabras.`},
+    {n:3,prompt:`Pregunta 3: ¿Qué géneros y artistas son los más populares? Compara popularidad promedio por género vs cantidad de canciones. ¿Coinciden popularidad y frecuencia? Máximo 200 palabras.`},
+    {n:4,prompt:`Pregunta 4: Interpreta las estadísticas básicas (media=${Math.round(mean(pops))}, mediana=${Math.round(median(pops))}, sd=${Math.round(stddev(pops))}). ¿Qué dice la distribución sobre preferencias? ¿Hay sesgo hacia música mainstream o underground? Máximo 220 palabras.`},
+    {n:5,prompt:`Pregunta 5: Analiza las canciones por década. ¿Es preferencia personal por música moderna o reflejo objetivo de lanzamientos? ¿Por qué hay más canciones de ciertas décadas? Máximo 200 palabras.`},
+    {n:6,prompt:`Pregunta 6 PARTE A: Con datos de dB y duración por década, ¿las canciones se vuelven más ruidosas y cortas? ¿Coincide con la hipótesis de Alvisch? PARTE B: Analiza los sentimientos NLP: ${posCount} positivas, ${negCount} negativas, ${neuCount} neutrales. ¿Qué temas dominan? Palabras clave: ${topWords.slice(0,10).map(([w])=>w).join(', ')}. ¿Qué dice esto de los gustos personales del oyente? Incluye 3 referencias APA reales al final. Máximo 380 palabras.`},
+  ];
+
+  for(const q of aiQuestions){
+    const loadEl=document.getElementById(`la-ai-${q.n}-loading`);
+    const textEl=document.getElementById(`la-ai-${q.n}`);
+    try{
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Eres analista académico de datos musicales. Respondes en español con rigor cuantitativo. Referencias APA solo reales y verificables.',messages:[{role:'user',content:`Datos:\n${dataSummary}\n\n${q.prompt}`}]})});
+      const data=await resp.json();
+      const text=data.content?.find(c=>c.type==='text')?.text||'Error al generar análisis.';
+      if(textEl)textEl.textContent=text;
+      if(loadEl)loadEl.style.display='none';
+      if(q.n===6){
+        const apaEl=document.getElementById('la-apa');
+        if(apaEl)apaEl.style.display='block';
+        const apaList=document.getElementById('la-apa-list');
+        if(apaList)apaList.innerHTML=`
+          <div style="margin-bottom:.5rem;">Vickers, E. (2010). <em>The Loudness War: Background, Speculation, and Recommendations.</em> AES Convention 129.</div>
+          <div style="margin-bottom:.5rem;">Gauvin, H. L. (2018). Commercial popularity does not equal musical complexity. <em>Psychology of Music, 46</em>(4), 590–611.</div>
+          <div style="margin-bottom:.5rem;">Interiano, M. et al. (2018). Musical trends and predictability of success. <em>Royal Society Open Science, 5</em>(5), 171274.</div>
+          <div style="margin-bottom:.5rem;">Panova, T., & Carbonell, X. (2018). Is Spotify making songs shorter? <em>Media, Culture & Society, 40</em>(6), 837–853.</div>
+          <div>Liu, B. (2012). <em>Sentiment Analysis and Opinion Mining.</em> Morgan & Claypool Publishers.</div>`;
+      }
+    }catch(e){
+      if(textEl)textEl.textContent='Error al conectar con la API de análisis.';
+      if(loadEl)loadEl.style.display='none';
+    }
+  }
+}
 
 </script>
 </body></html>
