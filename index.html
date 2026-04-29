@@ -279,10 +279,10 @@ Spotify Pulse<span class="logo-dot"></span></div>
 <span style="color:var(--green);">✓</span> Ver tus canciones más escuchadas (top 200)<br>
 <span style="color:var(--green);">✓</span> Acceso de solo lectura — nunca modificamos tu cuenta<br>
 <span style="color:var(--green);">✓</span> No guardamos tus datos en ningún servidor</div></div>
-<button class="btn-spotify" onclick="startAuth()" style="width:100%;justify-content:center;font-size:1rem;padding:1rem;">
+<button class="btn-spotify" onclick="this.textContent='Conectando...';startAuth().finally(()=>{this.innerHTML='<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z\"/></svg> Iniciar sesión con Spotify';});" style="width:100%;justify-content:center;font-size:1rem;padding:1rem;">
 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 01-.277-1.215c3.809-.87 7.076-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.779.779 0 01-1.072.257c-2.687-1.652-6.785-2.13-9.965-1.166a.78.78 0 01-.973-.52.78.78 0 01.52-.973c3.632-1.102 8.147-.568 11.233 1.329a.779.779 0 01.257 1.073zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.935.935 0 11-.543-1.79c3.532-1.072 9.404-.865 13.115 1.338a.935.935 0 01-.955 1.609z"/></svg>
 Iniciar sesión con Spotify</button>
-<p style="margin-top:1rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);text-align:center;">🔐 OAuth 2.0 PKCE · <a href="#" onclick="showPrivacy()" style="color:var(--green);">Privacidad</a></p>
+<p style="margin-top:1rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--muted);text-align:center;">🔐 OAuth 2.0 PKCE · <a href="#" onclick="showPrivacy()" style="color:var(--green);">Privacidad</a> · <a href="#" onclick="sessionStorage.removeItem('sp_consented');showConsentModal();" style="color:var(--muted);">Cambiar correo</a></p>
 </div></div><div id="privacy-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;align-items:center;justify-content:center;padding:1rem;">
 <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem;max-width:540px;width:100%;max-height:80vh;overflow-y:auto;">
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;"><h2 style="font-size:1.2rem;font-weight:800;">🔐 Política de Privacidad</h2><button onclick="closePrivacy()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.35rem .75rem;cursor:pointer;">✕ Cerrar</button></div>
@@ -373,11 +373,11 @@ window.onload=async function(){
   if(code){history.replaceState(null,'',window.location.pathname);await exchangeCode(code);return;}
   const stored=sessionStorage.getItem('sp_token'),expiry=sessionStorage.getItem('sp_expiry');
   if(stored&&expiry&&Date.now()<parseInt(expiry)){accessToken=stored;showDashboard();return;}
-  if(sessionStorage.getItem('sp_consented'))showAuth();else showConsentModal();
+  showConsentModal();
 };
 async function exchangeCode(code){
   const verifier=sessionStorage.getItem('pkce_verifier');if(!verifier){showAuth();return;}
-  try{const res=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:REDIRECT_URI,client_id:CLIENT_ID,code_verifier:verifier})});
+  try{const res=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:REDIRECT_URI,client_id:CLIENT_ID||localStorage.getItem('sp_client_id')||'',code_verifier:verifier})});
   const data=await res.json();if(data.access_token){accessToken=data.access_token;sessionStorage.setItem('sp_token',accessToken);sessionStorage.setItem('sp_expiry',Date.now()+data.expires_in*1000);sessionStorage.removeItem('pkce_verifier');showDashboard();}
   else{showAuth();alert('Error: '+(data.error_description||data.error));}}catch(e){showAuth();alert('Error: '+e.message);}
 }
@@ -396,11 +396,31 @@ function checkConsentReady(){
 function acceptConsent(){const email=document.getElementById('consent-email')?.value?.trim();if(!email)return;sessionStorage.setItem('sp_consented','1');document.getElementById('consent-modal').style.display='none';showAuth();}
 function showPrivacy(){const m=document.getElementById('privacy-modal');if(m)m.style.display='flex';}
 function closePrivacy(){const m=document.getElementById('privacy-modal');if(m)m.style.display='none';}
-function showAuth(){document.getElementById('auth-screen').classList.remove('hidden');document.getElementById('setup-screen').classList.add('hidden');document.getElementById('dashboard').classList.add('hidden');}
+function showAuth(){
+  const hasCid = !!(CLIENT_ID || localStorage.getItem('sp_client_id'));
+  if(!hasCid){
+    document.getElementById('setup-screen').classList.remove('hidden');
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('dashboard').classList.add('hidden');
+    return;
+  }
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+}
 function logout(){sessionStorage.clear();accessToken=null;tracksData=[];showAuth();}
 function doAuth(){const cid=document.getElementById('client-id-input').value.trim();if(!cid)return;localStorage.setItem('sp_client_id',cid);startAuth();}
 function validateClientId(input){const val=input.value.trim(),valid=/^[a-f0-9]{32}$/i.test(val),hint=document.getElementById('client-id-hint'),btn=document.getElementById('connect-btn');if(!val){hint.textContent='';btn.disabled=true;btn.style.opacity='.5';}else if(valid){hint.textContent='✓ Client ID válido';hint.style.color='var(--green)';input.style.borderColor='var(--green)';btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}else{hint.textContent='Formato incorrecto';hint.style.color='var(--red)';btn.disabled=true;btn.style.opacity='.5';}}
-async function startAuth(){if(!CLIENT_ID){alert('⚠ Client ID no configurado.');return;}const verifier=generateRandom(64),challenge=await generateCodeChallenge(verifier);sessionStorage.setItem('pkce_verifier',verifier);window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({client_id:CLIENT_ID,response_type:'code',redirect_uri:REDIRECT_URI,scope:SCOPES,state:generateRandom(16),code_challenge_method:'S256',code_challenge:challenge,show_dialog:'false'});}
+async function startAuth(){
+  const _cid=CLIENT_ID||localStorage.getItem('sp_client_id');
+  console.log('[startAuth] CLIENT_ID:', CLIENT_ID, '| localStorage cid:', localStorage.getItem('sp_client_id'), '| _cid:', _cid);
+  if(!_cid){
+    // Show setup screen instead of alert
+    document.getElementById('setup-screen').classList.remove('hidden');
+    document.getElementById('auth-screen').classList.add('hidden');
+    showToast('⚠ Configura tu Client ID primero',4000);
+    return;
+  }const verifier=generateRandom(64),challenge=await generateCodeChallenge(verifier);sessionStorage.setItem('pkce_verifier',verifier);window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({client_id:_cid,response_type:'code',redirect_uri:REDIRECT_URI,scope:SCOPES,state:generateRandom(16),code_challenge_method:'S256',code_challenge:challenge,show_dialog:'false'});}
 function showDashboard(){document.getElementById('auth-screen').classList.add('hidden');document.getElementById('setup-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');document.getElementById('loading').classList.remove('hidden');document.getElementById('content').classList.add('hidden');const tr=sessionStorage.getItem('sp_range')||'short_term';currentRange=tr;updateRangeButtons(tr);loadData();}
 // === TABS ===
 const ALL_TABS=['tracks','wrapped','recs','gems','evolution','map','session','palette','timeline','records','average','lab'];
